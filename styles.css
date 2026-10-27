@@ -68,3 +68,19 @@ body::before {
   animation: pulse 2s ease-in-out infinite;
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+.main-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0.5rem 2rem;
+  background: rgba(5, 8, 15, 0.95);
+  border-bottom: 1px solid var(--border);
+}
