@@ -38,3 +38,23 @@ body::before {
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--border);
 }
+
+.brand h1 {
+  color: var(--cyan);
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+}
+
+.brand p {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  letter-spacing: 0.15em;
+}
+
+.system-status { text-align: right; font-size: 0.75rem; color: var(--orange); }
+.sim-tag {
+  font-size: 0.6rem;
+  border: 1px solid var(--orange);
+  padding: 0 0.4rem;
+  border-radius: 3px;
+}
