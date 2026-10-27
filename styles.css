@@ -116,3 +116,12 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
 .panel::before { top: -1px;    left: -1px;  border-right: 0; border-bottom: 0; }
 .panel::after  { bottom: -1px; right: -1px; border-left: 0;  border-top: 0; }
 
+.eyebrow, .module-number, .panel-label, .stat-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+}
+
+.hero { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.5rem; }
+.welcome-panel h2 { font-size: 2.2rem; margin: 0.5rem 0 1rem; }
+.welcome-panel p { color: var(--text-dim); }
