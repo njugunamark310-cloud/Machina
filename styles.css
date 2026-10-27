@@ -106,3 +106,13 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
   border: 1px solid var(--border);
   padding: 1.5rem;
 }
+
+.panel::before, .panel::after {
+  content: "";
+  position: absolute;
+  width: 14px; height: 14px;
+  border: 2px solid var(--cyan);
+}
+.panel::before { top: -1px;    left: -1px;  border-right: 0; border-bottom: 0; }
+.panel::after  { bottom: -1px; right: -1px; border-left: 0;  border-top: 0; }
+
