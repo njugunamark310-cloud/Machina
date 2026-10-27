@@ -28,16 +28,51 @@ controls.dampingFactor = 0.05;
 controls.minDistance = 3;
 controls.maxDistance = 10;
 
-const geometry = new THREE.BoxGeometry(1.5, 1.5, 1.5);
 
-const material = new THREE.MeshStandardMaterial({
-    color: "#22d3ee",
-    metalness: 0.65,
+const engineGroup = new THREE.Group();
+scene.add(engineGroup);
+
+const engineMaterial = new THREE.MeshStandardMaterial({
+    color: "#536579",
+    metalness: 0.85,
+    roughness: 0.28
+});
+
+const blockGeometry = new THREE.BoxGeometry(1.8, 1.5, 1.2);
+const engineBlock = new THREE.Mesh(blockGeometry, engineMaterial);
+
+engineGroup.add(engineBlock);
+
+const headGeometry = new THREE.BoxGeometry(1.65, 0.35, 1.1);
+const headMaterial = new THREE.MeshStandardMaterial({
+    color: "#9aabbc",
+    metalness: 0.9,
+    roughness: 0.22
+});
+
+const cylinderHead = new THREE.Mesh(headGeometry, headMaterial);
+cylinderHead.position.y = 0.92;
+engineGroup.add(cylinderHead);
+
+const cylinderGeometry = new THREE.CylinderGeometry(0.19, 0.19, 0.65, 24);
+
+const cylinderMaterial = new THREE.MeshStandardMaterial({
+    color: "#26394b",
+    metalness: 0.8,
     roughness: 0.3
 });
 
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+for (let i = 0; i < 4; i++) {
+    const cylinder = new THREE.Mesh(
+        cylinderGeometry,
+        cylinderMaterial
+    );
+
+    cylinder.position.set(-0.57 + i * 0.38, 0.38, 0.72);
+    engineGroup.add(cylinder);
+}
+
+
 
 const light = new THREE.DirectionalLight("#ffffff", 3);
 light.position.set(3, 4, 5);
