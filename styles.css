@@ -84,3 +84,25 @@ body::before {
   background: rgba(5, 8, 15, 0.95);
   border-bottom: 1px solid var(--border);
 }
+
+.main-nav a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.main-nav a:hover { color: var(--cyan); border-color: var(--cyan); }
+
+main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5rem; }
+
+.panel {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+}
