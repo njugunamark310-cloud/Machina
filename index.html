@@ -39,5 +39,24 @@
          </p>
          <a class="btn" href="#engine-lab">Enter Engine Lab</a>
        </div>
+    
+       <div class="gauge-panel panel">
+         <p class="panel-label">ENGINE RPM <span class="sim-tag">SIM</span></p>
+         <svg class="gauge" viewBox="0 0 200 120" aria-label="RPM gauge"></svg>
+         <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" />
+         <path id="gauge-value" class="gauge-value" d="M 20 100 A 80 80 0 0 1 180 100" />
+         <text id="gauge-text" x="100" y="92" text-anchor="middle" class="gauge-number">4200</text>
+         <text x="100" y="110" text-anchor="middle" class="gauge-unit">RPM</text>
+        </svg>
+      </div>
+    </section>
+
+    <section class="stats">
+        <div class="stat panel">
+          <p class="stat-label">SPEED</p>
+          <p class="stat-value" id="stat-speed">86 <small>km/h</small></p>
+        </div>
+
+        
 </body>
 </html>
