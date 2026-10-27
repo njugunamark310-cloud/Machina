@@ -1,0 +1,13 @@
+:root {
+  --bg-deep: #05080f;
+  --bg-panel: #0b1220;
+  --border: #16324a;
+  --cyan: #00e5ff;
+  --blue: #2979ff;
+  --orange: #ff8a00;
+  --text: #d7e6f5;
+  --text-dim: #7f95ab;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
