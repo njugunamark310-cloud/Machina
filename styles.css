@@ -58,3 +58,13 @@ body::before {
   padding: 0 0.4rem;
   border-radius: 3px;
 }
+
+.status-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  margin-right: 0.5rem;
+  border-radius: 50%;
+  background: #00ff9c;
+  animation: pulse 2s ease-in-out infinite;
+}
+
