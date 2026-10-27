@@ -217,3 +217,89 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+.engine-viewer {
+    margin: 28px 0;
+    padding: 24px;
+    overflow: hidden;
+}
+
+.engine-viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.engine-viewer-header h2 {
+    margin: 8px 0 0;
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    letter-spacing: -0.04em;
+}
+
+.engine-canvas {
+    position: relative;
+    width: 100%;
+    height: 480px;
+    margin-top: 24px;
+    overflow: hidden;
+    border: 1px solid rgba(34, 211, 238, 0.2);
+    border-radius: 12px;
+    background:
+        radial-gradient(ellipse at center, rgba(8, 47, 73, 0.48), transparent 65%),
+        linear-gradient(rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(34, 211, 238, 0.035) 1px, transparent 1px),
+        #080d17;
+    background-size: auto, 32px 32px, 32px 32px, auto;
+}
+
+.engine-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #67e8f9;
+    font-size: 0.8rem;
+    letter-spacing: 0.16em;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.engine-instructions {
+    margin: 16px 0 0;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-align: center;
+}
+
+.engine-instructions span {
+    padding: 0 8px;
+    color: #22d3ee;
+}
+
+@media (max-width: 600px) {
+    .engine-viewer {
+        padding: 16px;
+    }
+
+    .engine-canvas {
+        height: 340px;
+    }
+
+    .engine-viewer-header {
+        align-items: flex-start;
+    }
+}
+.engine-canvas canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+.engine-canvas canvas:active {
+    cursor: grabbing;
+}
+
