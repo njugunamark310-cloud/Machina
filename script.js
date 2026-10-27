@@ -43,6 +43,24 @@ const engineBlock = new THREE.Mesh(blockGeometry, engineMaterial);
 
 engineGroup.add(engineBlock);
 
+
+const blockEdges = new THREE.EdgesGeometry(blockGeometry);
+
+const hologramMaterial = new THREE.LineBasicMaterial({
+    color: "#00e5ff",
+    transparent: true,
+    opacity: 0.9
+});
+
+const blockWireframe = new THREE.LineSegments(
+    blockEdges,
+    hologramMaterial
+);
+
+blockWireframe.scale.setScalar(1.003);
+engineGroup.add(blockWireframe);
+
+
 const headGeometry = new THREE.BoxGeometry(1.65, 0.35, 1.1);
 const headMaterial = new THREE.MeshStandardMaterial({
     color: "#9aabbc",
