@@ -158,3 +158,22 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
 .stat-value { font-size: 1.8rem; font-weight: 700; margin-top: 0.25rem; }
 .stat-value small { font-size: 0.8rem; color: var(--text-dim); font-weight: 400; }
 
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+.module-card {
+  transition: transform 0.2s, border-color 0.2s;
+}
+.module-card:hover { transform: translateY(-4px); border-color: var(--cyan); }
+.module-card h3 { margin: 0.4rem 0; }
+.module-card p:not(.module-number) { color: var(--text-dim); font-size: 0.9rem; }
+.module-status {
+  display: inline-block;
+  margin-top: 1rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  color: #00ff9c;
+}
+.module-status.locked { color: var(--orange); }
