@@ -40,15 +40,18 @@
          <a class="btn" href="#engine-lab">Enter Engine Lab</a>
        </div>
     
+      
        <div class="gauge-panel panel">
          <p class="panel-label">ENGINE RPM <span class="sim-tag">SIM</span></p>
-         <svg class="gauge" viewBox="0 0 200 120" aria-label="RPM gauge"></svg>
-         <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" />
-         <path id="gauge-value" class="gauge-value" d="M 20 100 A 80 80 0 0 1 180 100" />
-         <text id="gauge-text" x="100" y="92" text-anchor="middle" class="gauge-number">4200</text>
-         <text x="100" y="110" text-anchor="middle" class="gauge-unit">RPM</text>
+
+        <svg class="gauge" viewBox="0 0 200 120" role="img" aria-label="Simulated engine speed: 4200 RPM">
+        <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" />
+        <path id="gauge-value" class="gauge-value" d="M 20 100 A 80 80 0 0 1 180 100" />
+        <text id="gauge-text" x="100" y="92" text-anchor="middle" class="gauge-number">4200</text>
+        <text x="100" y="110" text-anchor="middle" class="gauge-unit">RPM</text>
         </svg>
-      </div>
+        </div>
+
     </section>
 
     <section class="stats">
@@ -124,7 +127,8 @@
     </section>
   </main>
 
-
-
+  <footer class="footer">
+    <p>MACHINA is an educational project. All readings are <strong>simulated</strong>, not real vehicle measurements.</p>
+  </footer>
 </body>
 </html>
