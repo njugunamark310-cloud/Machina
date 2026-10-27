@@ -201,3 +201,19 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
 }
 .axiom-form input:focus { outline: none; border-color: var(--cyan); }
 .axiom-form .btn { margin-top: 0; }
+
+.footer {
+  text-align: center;
+  padding: 2rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 800px) {
+  .hero { grid-template-columns: 1fr; }
+  .topbar, .main-nav, main { padding-left: 1rem; padding-right: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
