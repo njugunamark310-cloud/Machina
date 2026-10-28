@@ -371,6 +371,22 @@ for (let i = 0; i < 4; i++) {
     crankshaftGroup.add(crankPin);
 }
 
+const connectingRodMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd97732,
+    metalness: 0.75,
+    roughness: 0.3
+});
+
+for (let i = 0; i < 4; i++) {
+    const rod = new THREE.Mesh(
+        new THREE.BoxGeometry(0.09, 0.42, 0.07),
+        connectingRodMaterial
+    );
+
+    rod.position.set(-0.54 + i * 0.36, 0.12, 0);
+    crankshaftGroup.add(rod);
+}
+
 crankshaftGroup.position.y = -0.25;
 engineGroup.add(crankshaftGroup);
 
