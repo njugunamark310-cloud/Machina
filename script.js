@@ -344,6 +344,37 @@ for (let i = 0; i < 4; i++) {
     cylinderMaterials.push(material);
 }
 
+
+const crankshaftGroup = new THREE.Group();
+const crankshaftMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8c9ba8,
+    metalness: 0.9,
+    roughness: 0.25
+});
+
+const crankshaftMain = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.075, 0.075, 1.55, 24),
+    crankshaftMaterial
+);
+
+crankshaftMain.rotation.z = Math.PI / 2;
+crankshaftGroup.add(crankshaftMain);
+
+for (let i = 0; i < 4; i++) {
+    const crankPin = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.055, 0.24, 20),
+        crankshaftMaterial
+    );
+
+    crankPin.rotation.z = Math.PI / 2;
+    crankPin.position.set(-0.54 + i * 0.36, -0.18, 0);
+    crankshaftGroup.add(crankPin);
+}
+
+crankshaftGroup.position.y = -0.25;
+engineGroup.add(crankshaftGroup);
+
+
 const oilPanSize = [1.35, 0.38, 1.0];
 const oilPan = registerPart(
     new THREE.Mesh(new RoundedBoxGeometry(...oilPanSize, 3, 0.04), oilPanMaterial),
