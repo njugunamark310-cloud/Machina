@@ -131,6 +131,14 @@ const light = new THREE.DirectionalLight("#ffffff", 3);
 light.position.set(3, 4, 5);
 scene.add(light);
 
+const cyanLight = new THREE.PointLight("#00e5ff", 12, 8);
+cyanLight.position.set(-3, 1, 2);
+scene.add(cyanLight);
+
+const orangeLight = new THREE.PointLight("#ff8a00", 8, 8);
+orangeLight.position.set(3, -1, -2);
+scene.add(orangeLight);
+
 scene.add(new THREE.AmbientLight("#ffffff", 1));
 
 function animate() {
