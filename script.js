@@ -387,6 +387,21 @@ for (let i = 0; i < 4; i++) {
     crankshaftGroup.add(rod);
 }
 
+const pistonMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc4ccd3,
+    metalness: 0.85,
+    roughness: 0.22
+});
+
+const pistonGeometry = new THREE.CylinderGeometry(0.145, 0.145, 0.22, 32);
+
+for (let i = 0; i < 4; i++) {
+    const piston = new THREE.Mesh(pistonGeometry, pistonMaterial);
+
+    piston.position.set(-0.54 + i * 0.36, 0.38, 0);
+    crankshaftGroup.add(piston);
+}
+
 crankshaftGroup.position.y = -0.25;
 engineGroup.add(crankshaftGroup);
 
