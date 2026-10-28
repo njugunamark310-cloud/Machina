@@ -347,9 +347,14 @@ function updateExplodedView() {
     });
 }
 
-function animate() {
+
+function animate(time = 0) {
     requestAnimationFrame(animate);
+
     controls.update();
+    updateExplodedView();
+    updateTelemetry(time);
+
     renderer.render(scene, camera);
 }
 
