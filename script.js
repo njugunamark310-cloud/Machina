@@ -255,6 +255,19 @@ const engineBlock = registerPart(
 engineGroup.add(engineBlock);
 addWireframe(new THREE.BoxGeometry(...blockSize), engineBlock.position);
 
+
+const crankcaseBoltGeometry = new THREE.CylinderGeometry(0.045, 0.045, 0.035, 12);
+
+for (let i = 0; i < 6; i++) {
+    const bolt = new THREE.Mesh(crankcaseBoltGeometry, boltMaterial);
+
+    bolt.rotation.x = Math.PI / 2;
+    bolt.position.set(-0.72 + i * 0.288, -0.48, 0.665);
+
+    engineGroup.add(bolt);
+}
+
+
 const ribGeometry = new THREE.BoxGeometry(0.09, 1.15, 0.08);
 
 for (let i = 0; i < 5; i++) {
