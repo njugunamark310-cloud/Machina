@@ -410,3 +410,52 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
     }
 }
 
+.component-panel {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    background: linear-gradient(135deg, var(--bg-panel), var(--bg-deep));
+}
+
+.component-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.component-panel-header h3 {
+    margin: 0.5rem 0;
+    color: var(--cyan);
+}
+
+.component-description {
+    color: var(--text-dim);
+    line-height: 1.7;
+}
+
+.component-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0;
+}
+
+.component-details > div {
+    padding: 1rem;
+    border: 1px solid var(--border);
+    background: rgba(5, 8, 15, 0.6);
+    overflow-wrap: anywhere;
+}
+
+.component-details > div > p:last-child {
+    color: var(--text);
+    line-height: 1.6;
+}
+
+@media (max-width: 500px) {
+    .component-details {
+        grid-template-columns: 1fr;
+    }
+}
