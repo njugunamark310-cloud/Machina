@@ -961,9 +961,19 @@ const movableParts = [
     })),
     ...exhaustParts.map((object, index) => ({
         object,
-        offset: new THREE.Vector3(0, -0.15, index % 2 === 0 ? -1.0 : -1.35)
-    }))
+         offset: new THREE.Vector3(0, -0.15, index % 2 === 0 ? -1.0 : -1.35)
+    })),
+
+    {
+        object: crankcase,
+        offset: new THREE.Vector3(0, -0.65, 0)
+    },
+    {
+        object: crankshaftGroup,
+        offset: new THREE.Vector3(0, -0.3, 0.8)
+    }
 ];
+    
 
 for (const part of movableParts) {
     part.start = part.object.position.clone();
