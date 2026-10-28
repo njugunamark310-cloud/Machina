@@ -493,6 +493,43 @@ turboGroup.add(turboShaft);
 
 engineGroup.add(turboGroup);
 
+const compressorWheel = new THREE.Group();
+
+const compressorBladeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x48c9d8,
+    metalness: 0.8,
+    roughness: 0.25
+});
+
+const compressorHub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.065, 0.065, 0.045, 24),
+    turboHousingMaterial
+);
+
+compressorHub.rotation.x = Math.PI / 2;
+compressorWheel.add(compressorHub);
+
+for (let i = 0; i < 8; i++) {
+    const blade = new THREE.Mesh(
+        new THREE.BoxGeometry(0.035, 0.15, 0.018),
+        compressorBladeMaterial
+    );
+
+     const angle = (i / 8) * Math.PI * 2;
+
+    blade.position.set(
+        Math.cos(angle) * 0.105,
+        Math.sin(angle) * 0.105,
+        0
+    );
+
+    blade.rotation.z = angle + 0.45;
+    compressorWheel.add(blade);
+}
+
+compressorWheel.position.set(0.65, -0.05, -0.78);
+turboGroup.add(compressorWheel);
+
 
 
 const badge = new THREE.Mesh(
