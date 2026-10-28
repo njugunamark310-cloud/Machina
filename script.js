@@ -72,6 +72,19 @@ const cylinderHead = new THREE.Mesh(headGeometry, headMaterial);
 cylinderHead.position.y = 0.92;
 engineGroup.add(cylinderHead);
 
+
+const headEdges = new THREE.EdgesGeometry(headGeometry);
+
+const headWireframe = new THREE.LineSegments(
+    headEdges,
+    hologramMaterial
+);
+
+headWireframe.scale.setScalar(1.003);
+headWireframe.position.copy(cylinderHead.position);
+engineGroup.add(headWireframe);
+
+
 const cylinderGeometry = new THREE.CylinderGeometry(0.19, 0.19, 0.65, 24);
 
 const cylinderMaterial = new THREE.MeshStandardMaterial({
