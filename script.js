@@ -398,6 +398,38 @@ for (let i = 0; i < 4; i++) {
 engineGroup.add(valveGroup);
 
 
+const intakeGroup = new THREE.Group();
+
+const intakeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x168da5,
+    metalness: 0.75,
+    roughness: 0.28
+});
+
+const intakePlenum = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.13, 0.13, 1.25, 24),
+    intakeMaterial
+);
+
+intakePlenum.rotation.z = Math.PI / 2;
+intakePlenum.position.set(0, 0.45, 0.82);
+intakeGroup.add(intakePlenum);
+
+for (let i = 0; i < 4; i++) {
+    const runner = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.055, 0.075, 0.42, 16),
+        intakeMaterial
+    );
+
+    runner.position.set(-0.48 + i * 0.32, 0.2, 0.65);
+    runner.rotation.x = -0.25;
+    intakeGroup.add(runner);
+}
+
+engineGroup.add(intakeGroup);
+
+
+
 const badge = new THREE.Mesh(
     new THREE.PlaneGeometry(1.0, 0.25),
     new THREE.MeshBasicMaterial({
