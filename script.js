@@ -458,6 +458,31 @@ exhaustManifoldGroup.add(exhaustCollector);
 
 engineGroup.add(exhaustManifoldGroup);
 
+const oilFilterGroup = new THREE.Group();
+
+const oilFilterMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc83232,
+    metalness: 0.45,
+    roughness: 0.35
+});
+
+const oilFilterBody = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.14, 0.38, 32),
+    oilFilterMaterial
+);
+
+oilFilterBody.position.set(-0.62, -0.42, 0.64);
+oilFilterGroup.add(oilFilterBody);
+
+const oilFilterCap = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.145, 0.145, 0.035, 32),
+    boltMaterial
+);
+oilFilterCap.position.set(-0.62, -0.22, 0.64);
+oilFilterGroup.add(oilFilterCap);
+
+engineGroup.add(oilFilterGroup);
+
 const turboGroup = new THREE.Group();
 
 const turboHousingMaterial = new THREE.MeshStandardMaterial({
