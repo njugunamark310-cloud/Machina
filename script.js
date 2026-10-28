@@ -428,6 +428,36 @@ for (let i = 0; i < 4; i++) {
 
 engineGroup.add(intakeGroup);
 
+const exhaustManifoldGroup = new THREE.Group();
+
+const exhaustManifoldMaterial = new THREE.MeshStandardMaterial({
+    color: 0xb85c32,
+    metalness: 0.8,
+    roughness: 0.3
+});
+
+for (let i = 0; i < 4; i++) {
+    const runner = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.055, 0.65, 16),
+        exhaustMaterial
+    );
+
+    runner.position.set(-0.48 + i * 0.32, 0.05, -0.72);
+    runner.rotation.z = (i - 1.5) * 0.16;
+    exhaustManifoldGroup.add(runner);
+}
+
+const exhaustCollector = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.09, 0.13, 0.48, 20),
+    exhaustMaterial
+);
+
+exhaustCollector.rotation.x = Math.PI / 2;
+exhaustCollector.position.set(0, -0.12, -1.05);
+exhaustManifoldGroup.add(exhaustCollector);
+
+engineGroup.add(exhaustManifoldGroup);
+
 
 
 const badge = new THREE.Mesh(
