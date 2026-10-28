@@ -170,6 +170,34 @@ for (let i = 0; i < 4; i++) {
     engineGroup.add(cylinder);
 }
 
+const exhaustMaterial = new THREE.MeshStandardMaterial({
+    color: "#a6b4c2",
+    metalness: 0.95,
+    roughness: 0.22
+});
+
+const exhaustGeometry = new THREE.CylinderGeometry(
+    0.075,
+    0.095,
+    0.7,
+    16
+);
+
+for (let i = 0; i < 4; i++) {
+    const exhaustPipe = new THREE.Mesh(
+        exhaustGeometry,
+        exhaustMaterial
+    );
+
+    exhaustPipe.position.set(
+        -0.57 + i * 0.38,
+        -0.05,
+        -0.68
+    );
+
+    exhaustPipe.rotation.x = Math.PI / 2;
+    engineGroup.add(exhaustPipe);
+}
 
 
 const light = new THREE.DirectionalLight("#ffffff", 3);
