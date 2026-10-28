@@ -39,6 +39,41 @@ controls.target.set(0, 0, 0);
 const engineGroup = new THREE.Group();
 scene.add(engineGroup);
 
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+
+let selectedPart = null;
+
+const componentInfo = {
+    "Engine Block": {
+        description: "The main structure that houses the cylinders and supports major engine components.",
+        material: "Cast metal simulation",
+        function: "Supports the cylinders and internal moving parts."
+    },
+    "Cylinder Head": {
+        description: "The upper engine assembly that closes the cylinders and houses the combustion chamber area.",
+        material: "Aluminium alloy simulation",
+        function: "Supports the valves and combustion chamber."
+    },
+    "Oil Pan": {
+        description: "The lower engine enclosure that represents the engine's oil reservoir.",
+        material: "Metal alloy simulation",
+        function: "Stores engine oil for the lubrication system."
+    },
+    "Cylinder": {
+        description: "Represents one of the four cylinders in this simplified engine model.",
+        material: "Metal alloy simulation",
+        function: "Represents the chamber where combustion drives the piston."
+    },
+    "Exhaust Pipe": {
+        description: "Carries exhaust gases away from the engine in this simplified model.",
+        material: "Heat-resistant metal simulation",
+        function: "Represents the exhaust gas path."
+    }
+};
+
+
 const engineMaterial = new THREE.MeshStandardMaterial({
     color: "#536579",
     metalness: 0.85,
