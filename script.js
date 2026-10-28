@@ -263,6 +263,23 @@ for (let i = 0; i < 5; i++) {
     engineGroup.add(rib);
 }
 
+
+const crankcaseGeometry = new RoundedBoxGeometry(1.92, 0.42, 1.28, 3, 0.06);
+
+const crankcase = registerPart(
+    new THREE.Mesh(crankcaseGeometry, engineMaterial),
+    "Crankcase"
+);
+
+crankcase.position.set(0, -0.48, 0);
+engineGroup.add(crankcase);
+
+addWireframe(
+    new THREE.BoxGeometry(1.92, 0.42, 1.28),
+    crankcase.position
+);
+
+
 const headSize = [1.65, 0.35, 1.1];
 const cylinderHead = registerPart(
     new THREE.Mesh(new RoundedBoxGeometry(...headSize, 3, 0.04), headMaterial),
