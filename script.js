@@ -72,6 +72,24 @@ const cylinderHead = new THREE.Mesh(headGeometry, headMaterial);
 cylinderHead.position.y = 0.92;
 engineGroup.add(cylinderHead);
 
+const boltGeometry = new THREE.CylinderGeometry(0.055, 0.055, 0.035, 12);
+
+const boltMaterial = new THREE.MeshStandardMaterial({
+    color: "#d7e6f5",
+    metalness: 1,
+    roughness: 0.2
+});
+
+for (let i = 0; i < 6; i++) {
+    const bolt = new THREE.Mesh(boltGeometry, boltMaterial);
+
+    const x = -0.65 + (i % 3) * 0.65;
+    const z = i < 3 ? -0.42 : 0.42;
+
+    bolt.position.set(x, 1.12, z);
+    engineGroup.add(bolt);
+}
+
 
 const headEdges = new THREE.EdgesGeometry(headGeometry);
 
