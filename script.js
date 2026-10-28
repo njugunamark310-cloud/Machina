@@ -350,6 +350,54 @@ camshaftGroup.position.y = 1.17;
 engineGroup.add(camshaftGroup);
 
 
+const valveGroup = new THREE.Group();
+
+const valveMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd5dde5,
+    metalness: 0.85,
+    roughness: 0.25
+});
+
+const springMaterial = new THREE.MeshStandardMaterial({
+    color: 0xe87532,
+    metalness: 0.65,
+    roughness: 0.3
+});
+
+for (let i = 0; i < 4; i++) {
+    for (let v = 0; v < 2; v++) {
+        const x = -0.52 + i * 0.35;
+        const z = -0.22 + v * 0.44;
+
+        const stem = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.018, 0.018, 0.22, 12),
+            valveMaterial
+        );
+
+        stem.position.set(x, 0.91, z);
+        valveGroup.add(stem);
+
+        const valveHead = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.055, 0.04, 0.025, 20),
+            valveMaterial
+        );
+
+        valveHead.position.set(x, 0.79, z);
+        valveGroup.add(valveHead);
+
+        const spring = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.045, 0.045, 0.09, 16, 1, true),
+            springMaterial
+        );
+
+        spring.position.set(x, 1.02, z);
+        valveGroup.add(spring);
+    }
+}
+
+engineGroup.add(valveGroup);
+
+
 const badge = new THREE.Mesh(
     new THREE.PlaneGeometry(1.0, 0.25),
     new THREE.MeshBasicMaterial({
