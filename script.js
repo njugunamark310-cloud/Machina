@@ -972,6 +972,9 @@ function updateSimulation(time, dt) {
         ? Math.max(0.1, 0.8 + Math.sin(time * 0.0015) * 0.65)
         : 0;
 
+        document.getElementById("boostPressure").textContent =
+        (0.4 + Math.sin(time * 0.0015) * 0.3).toFixed(1);
+
     sim.rpm = approach(sim.rpm, targetRpm, 3, dt);
     sim.temp = approach(sim.temp, targetTemp, 0.15, dt);
     sim.boost = approach(sim.boost, targetBoost, 2, dt);
