@@ -1,15 +1,58 @@
-
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 
-const container = document.querySelector("#engine-canvas");
+const COLORS = {
+    background: "#05080f",
+    cyan: "#00e5ff",
+    orange: "#ff8a00"
+};
+
+const MAX_RPM = 7000;
+
+const SLOW_MOTION = 40;
+const SHAKE_AMOUNT = 0.004;
+const FLOOR_Y = -1.9;
+const GAUGE_ARC = Math.PI * 80;
+
+const FIRING_OFFSETS = [0, 540, 180, 360];
+
+const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+).matches;
+
+const $ = (selector) => document.querySelector(selector);
+
+const container = $("#engine-canvas");
 
 if (!container) {
     throw new Error("Engine viewer container was not found.");
 }
 
+const ui = {
+    reset: $("#reset-view"),
+    hologram: $("#toggle-hologram"),
+    exploded: $("#toggle-exploded"),
+    engine: $("#toggle-engine"),
+    rpmValue: $("#rpm-value"),
+    tempValue: $("#temp-value"),
+    boostValue: $("#boost-value"),
+    rpmBar: $("#rpm-bar"),
+    tempBar: $("#temp-bar"),
+    boostBar: $("#boost-bar"),
+    gaugeText: $("#gauge-text"),
+    gaugePath: $("#gauge-value"),
+    partName: $("#part-name"),
+    partDescription: $("#part-description"),
+    partMaterial: $("#part-material"),
+    partFunction: $("#part-function")
+};
+
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#080d17");
+scene.background = new THREE.Color(COLORS.background);
+
+scene.fog = new THREE.Fog(COLORS.background, 9, 22);
 
 const camera = new THREE.PerspectiveCamera(
     45,
@@ -18,32 +61,51 @@ const camera = new THREE.PerspectiveCamera(
     100
 );
 
-camera.position.set(3, 2, 5);
-camera.lookAt(0, 0, 0);
+const cameraStart = new THREE.Vector3(3, 2, 5);
+const targetStart = new THREE.Vector3(0, 0, 0);
+camera.position.copy(cameraStart);
+camera.lookAt(targetStart);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
 
 container.querySelector(".engine-loading")?.remove();
 container.appendChild(renderer.domElement);
 
+const pmrem = new THREE.PMREMGenerator(renderer);
+const studio = new RoomEnvironment();
+scene.environment = pmrem.fromScene(studio, 0.04).texture;
+scene.environmentIntensity = 0.55;
+studio.dispose?.();
+pmrem.dispose();
+
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
+controls.enablePan = false;
 controls.minDistance = 3;
 controls.maxDistance = 10;
-controls.target.set(0, 0, 0);
+controls.maxPolarAngle = Math.PI * 0.52;
+controls.target.copy(targetStart);
+controls.autoRotate = !prefersReducedMotion;
+controls.autoRotateSpeed = 0.7;
 
-const engineGroup = new THREE.Group();
-scene.add(engineGroup);
-
-
-const raycaster = new THREE.Raycaster();
-const pointer = new THREE.Vector2();
-
-let selectedPart = null;
+let resumeSpinTimer;
+controls.addEventListener("start", () => {
+    controls.autoRotate = false;
+    clearTimeout(resumeSpinTimer);
+});
+controls.addEventListener("end", () => {
+    if (prefersReducedMotion) return;
+    resumeSpinTimer = setTimeout(() => {
+        controls.autoRotate = true;
+    }, 5000);
+});
 
 const componentInfo = {
     "Engine Block": {
@@ -62,7 +124,7 @@ const componentInfo = {
         function: "Stores engine oil for the lubrication system."
     },
     "Cylinder": {
-        description: "Represents one of the four cylinders in this simplified engine model.",
+        description: "Represents one of the four cylinders in this simplified engine model. It glows orange when it fires, in the order 1-3-4-2.",
         material: "Metal alloy simulation",
         function: "Represents the chamber where combustion drives the piston."
     },
@@ -70,14 +132,18 @@ const componentInfo = {
         description: "Carries exhaust gases away from the engine in this simplified model.",
         material: "Heat-resistant metal simulation",
         function: "Represents the exhaust gas path."
+    },
+    "Crank Pulley": {
+        description: "Sits on the end of the crankshaft. The orange mark lets you see the crank turning, slowed down so your eyes can follow it.",
+        material: "Steel simulation",
+        function: "In a real engine it drives belts for parts like the alternator and water pump."
     }
 };
-
 
 const engineMaterial = new THREE.MeshStandardMaterial({
     color: "#536579",
     metalness: 0.85,
-    roughness: 0.28
+    roughness: 0.3
 });
 
 const headMaterial = new THREE.MeshStandardMaterial({
@@ -86,12 +152,18 @@ const headMaterial = new THREE.MeshStandardMaterial({
     roughness: 0.22
 });
 
-const cylinderMaterial = new THREE.MeshStandardMaterial({
+const oilPanMaterial = new THREE.MeshStandardMaterial({
+    color: "#354657",
+    metalness: 0.85,
+    roughness: 0.32
+});
+
+const cylinderMaterialTemplate = new THREE.MeshStandardMaterial({
     color: "#60758a",
     metalness: 0.9,
     roughness: 0.24,
-    emissive: "#071522",
-    emissiveIntensity: 0.35
+    emissive: COLORS.orange,
+    emissiveIntensity: 0
 });
 
 const exhaustMaterial = new THREE.MeshStandardMaterial({
@@ -106,166 +178,310 @@ const boltMaterial = new THREE.MeshStandardMaterial({
     roughness: 0.2
 });
 
-const hologramMaterial = new THREE.LineBasicMaterial({
-    color: "#00e5ff",
-    transparent: true,
-    opacity: 0.9
+const darkMaterial = new THREE.MeshStandardMaterial({
+    color: "#0a1018",
+    metalness: 0.5,
+    roughness: 0.6
 });
 
-const blockGeometry = new THREE.BoxGeometry(1.8, 1.5, 1.2);
-const engineBlock = new THREE.Mesh(blockGeometry, engineMaterial);
-engineGroup.add(engineBlock);
+const markMaterial = new THREE.MeshStandardMaterial({
+    color: COLORS.orange,
+    emissive: COLORS.orange,
+    emissiveIntensity: 1.2
+});
 
-const blockEdges = new THREE.EdgesGeometry(blockGeometry);
-const blockWireframe = new THREE.LineSegments(
-    blockEdges,
-    hologramMaterial
+const hologramMaterial = new THREE.LineBasicMaterial({
+    color: COLORS.cyan,
+    transparent: true,
+    opacity: 0.9,
+    toneMapped: false
+});
+
+const engineGroup = new THREE.Group();
+scene.add(engineGroup);
+
+const pickableParts = [];
+const hologramParts = [];
+
+function registerPart(mesh, partName) {
+    mesh.userData.partName = partName;
+    pickableParts.push(mesh);
+    return mesh;
+}
+
+function addWireframe(boxGeometry, position) {
+    const wire = new THREE.LineSegments(
+        new THREE.EdgesGeometry(boxGeometry),
+        hologramMaterial
+    );
+    wire.scale.setScalar(1.003);
+    wire.position.copy(position);
+    engineGroup.add(wire);
+    hologramParts.push(wire);
+    return wire;
+}
+
+function makeBadgeTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+
+    ctx.strokeStyle = COLORS.cyan;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(6, 6, 500, 116);
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = COLORS.orange;
+    ctx.font = "bold 64px monospace";
+    ctx.fillText("MACHINA", 256, 52);
+    ctx.fillStyle = COLORS.cyan;
+    ctx.font = "24px monospace";
+    ctx.fillText("SIMULATED 4-CYL ENGINE", 256, 100);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return texture;
+}
+
+const blockSize = [1.8, 1.5, 1.2];
+
+const engineBlock = registerPart(
+    new THREE.Mesh(new RoundedBoxGeometry(...blockSize, 3, 0.05), engineMaterial),
+    "Engine Block"
 );
-blockWireframe.scale.setScalar(1.003);
-engineGroup.add(blockWireframe);
+engineGroup.add(engineBlock);
+addWireframe(new THREE.BoxGeometry(...blockSize), engineBlock.position);
 
-const headGeometry = new THREE.BoxGeometry(1.65, 0.35, 1.1);
-const cylinderHead = new THREE.Mesh(headGeometry, headMaterial);
+const ribGeometry = new THREE.BoxGeometry(0.09, 1.15, 0.08);
+
+for (let i = 0; i < 5; i++) {
+    const rib = new THREE.Mesh(ribGeometry, engineMaterial);
+    rib.position.set(-0.68 + i * 0.34, 0, 0.62);
+    engineGroup.add(rib);
+}
+
+const headSize = [1.65, 0.35, 1.1];
+const cylinderHead = registerPart(
+    new THREE.Mesh(new RoundedBoxGeometry(...headSize, 3, 0.04), headMaterial),
+    "Cylinder Head"
+);
 cylinderHead.position.y = 0.92;
 engineGroup.add(cylinderHead);
-
-const headEdges = new THREE.EdgesGeometry(headGeometry);
-const headWireframe = new THREE.LineSegments(
-    headEdges,
-    hologramMaterial
+const headWireframe = addWireframe(
+    new THREE.BoxGeometry(...headSize),
+    cylinderHead.position
 );
-headWireframe.scale.setScalar(1.003);
-headWireframe.position.copy(cylinderHead.position);
-engineGroup.add(headWireframe);
 
-const boltGeometry = new THREE.CylinderGeometry(
-    0.055, 0.055, 0.035, 12
-);
+const boltGeometry = new THREE.CylinderGeometry(0.055, 0.055, 0.035, 12);
 
 for (let i = 0; i < 6; i++) {
     const bolt = new THREE.Mesh(boltGeometry, boltMaterial);
     const x = -0.65 + (i % 3) * 0.65;
     const z = i < 3 ? -0.42 : 0.42;
-
-    bolt.position.set(x, 1.12, z);
-    engineGroup.add(bolt);
+    bolt.position.set(x, 0.2, z);
+    cylinderHead.add(bolt);
 }
 
-const cylinderGeometry = new THREE.CylinderGeometry(
-    0.19, 0.19, 0.65, 24
+const badge = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.0, 0.25),
+    new THREE.MeshBasicMaterial({
+        map: makeBadgeTexture(),
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false
+    })
 );
+badge.rotation.x = -Math.PI / 2;
+badge.position.y = 0.178;
+cylinderHead.add(badge);
+
+const cylinderGeometry = new THREE.CylinderGeometry(0.19, 0.19, 0.65, 32);
+const cylinderParts = [];
+const cylinderMaterials = [];
 
 for (let i = 0; i < 4; i++) {
-    const cylinder = new THREE.Mesh(
-        cylinderGeometry,
-        cylinderMaterial
+    const material = cylinderMaterialTemplate.clone();
+    const cylinder = registerPart(
+        new THREE.Mesh(cylinderGeometry, material),
+        "Cylinder"
     );
-
     cylinder.position.set(-0.57 + i * 0.38, 0.38, 0.48);
     engineGroup.add(cylinder);
+    cylinderParts.push(cylinder);
+    cylinderMaterials.push(material);
 }
 
-const oilPanGeometry = new THREE.BoxGeometry(1.35, 0.38, 1.0);
-const oilPanMaterial = new THREE.MeshStandardMaterial({
-    color: "#354657",
-    metalness: 0.85,
-    roughness: 0.32
-});
-
-const oilPan = new THREE.Mesh(oilPanGeometry, oilPanMaterial);
+const oilPanSize = [1.35, 0.38, 1.0];
+const oilPan = registerPart(
+    new THREE.Mesh(new RoundedBoxGeometry(...oilPanSize, 3, 0.04), oilPanMaterial),
+    "Oil Pan"
+);
 oilPan.position.set(0, -0.85, 0);
 engineGroup.add(oilPan);
-
-const oilPanEdges = new THREE.EdgesGeometry(oilPanGeometry);
-const oilPanWireframe = new THREE.LineSegments(
-    oilPanEdges,
-    hologramMaterial
+const oilPanWireframe = addWireframe(
+    new THREE.BoxGeometry(...oilPanSize),
+    oilPan.position
 );
-oilPanWireframe.position.copy(oilPan.position);
-oilPanWireframe.scale.setScalar(1.003);
-engineGroup.add(oilPanWireframe);
 
-const sideBoltGeometry = new THREE.CylinderGeometry(
-    0.045, 0.045, 0.06, 12
-);
+const sideBoltGeometry = new THREE.CylinderGeometry(0.045, 0.045, 0.06, 12);
 
 for (let i = 0; i < 3; i++) {
-    const sideBolt = new THREE.Mesh(
-        sideBoltGeometry,
-        boltMaterial
-    );
-
+    const sideBolt = new THREE.Mesh(sideBoltGeometry, boltMaterial);
     sideBolt.rotation.x = Math.PI / 2;
-    sideBolt.position.set(-0.48 + i * 0.48, -0.85, 0.53);
-    engineGroup.add(sideBolt);
+    sideBolt.position.set(-0.48 + i * 0.48, 0, 0.53);
+    oilPan.add(sideBolt);
 }
 
-const exhaustGeometry = new THREE.CylinderGeometry(
-    0.075, 0.095, 0.7, 16
-);
+const exhaustGeometry = new THREE.CylinderGeometry(0.075, 0.095, 0.7, 16);
+const exhaustParts = [];
 
 for (let i = 0; i < 4; i++) {
-    const exhaustPipe = new THREE.Mesh(
-        exhaustGeometry,
-        exhaustMaterial
+    const exhaustPipe = registerPart(
+        new THREE.Mesh(exhaustGeometry, exhaustMaterial),
+        "Exhaust Pipe"
     );
-
-    exhaustPipe.position.set(
-        -0.57 + i * 0.38,
-        -0.05,
-        -0.68
-    );
-
+    exhaustPipe.position.set(-0.57 + i * 0.38, -0.05, -0.68);
     exhaustPipe.rotation.x = Math.PI / 2;
     engineGroup.add(exhaustPipe);
+    exhaustParts.push(exhaustPipe);
 }
 
-const mainLight = new THREE.DirectionalLight("#ffffff", 3);
-mainLight.position.set(3, 4, 5);
-scene.add(mainLight);
+const pulleyGroup = new THREE.Group();
+pulleyGroup.position.set(1.0, -0.2, 0);
+engineGroup.add(pulleyGroup);
 
-const cyanLight = new THREE.PointLight("#00e5ff", 12, 8);
+const pulleyDisc = registerPart(
+    new THREE.Mesh(
+        new THREE.CylinderGeometry(0.42, 0.42, 0.1, 48).rotateZ(Math.PI / 2),
+        headMaterial
+    ),
+    "Crank Pulley"
+);
+pulleyGroup.add(pulleyDisc);
+
+const pulleyHub = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.14, 0.14, 0.2, 24).rotateZ(Math.PI / 2),
+    boltMaterial
+);
+pulleyHub.position.x = 0.05;
+pulleyGroup.add(pulleyHub);
+
+const pulleySpinner = new THREE.Group();
+pulleySpinner.position.x = 0.051;
+pulleyGroup.add(pulleySpinner);
+
+const holeGeometry = new THREE.CylinderGeometry(0.07, 0.07, 0.02, 16).rotateZ(Math.PI / 2);
+
+for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2;
+    const hole = new THREE.Mesh(holeGeometry, darkMaterial);
+    hole.position.set(0, Math.cos(angle) * 0.27, Math.sin(angle) * 0.27);
+    pulleySpinner.add(hole);
+}
+
+const timingMark = new THREE.Mesh(
+    new THREE.BoxGeometry(0.02, 0.12, 0.04),
+    markMaterial
+);
+timingMark.position.set(0, 0.34, 0);
+pulleySpinner.add(timingMark);
+
+const floorGroup = new THREE.Group();
+floorGroup.position.y = FLOOR_Y;
+scene.add(floorGroup);
+
+const grid = new THREE.GridHelper(24, 48, COLORS.cyan, "#12384f");
+grid.material.transparent = true;
+grid.material.opacity = 0.35;
+grid.material.toneMapped = false;
+floorGroup.add(grid);
+
+function makeGlowTexture() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 128;
+    canvas.height = 128;
+    const ctx = canvas.getContext("2d");
+    const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, "rgba(0, 229, 255, 0.22)");
+    gradient.addColorStop(1, "rgba(0, 229, 255, 0)");
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(canvas);
+}
+
+const glowPool = new THREE.Mesh(
+    new THREE.PlaneGeometry(6, 6).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({
+        map: makeGlowTexture(),
+        transparent: true,
+        depthWrite: false,
+        toneMapped: false
+    })
+);
+glowPool.position.y = 0.004;
+floorGroup.add(glowPool);
+
+const ringMaterial = new THREE.MeshBasicMaterial({
+    color: COLORS.cyan,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    toneMapped: false
+});
+
+const staticRing = new THREE.Mesh(
+    new THREE.RingGeometry(2.5, 2.54, 128).rotateX(-Math.PI / 2),
+    ringMaterial
+);
+staticRing.position.y = 0.008;
+floorGroup.add(staticRing);
+
+const pulseRing = new THREE.Mesh(
+    new THREE.RingGeometry(2.5, 2.54, 128).rotateX(-Math.PI / 2),
+    ringMaterial.clone()
+);
+pulseRing.position.y = 0.012;
+floorGroup.add(pulseRing);
+
+const scanGroup = new THREE.Group();
+const scanGeometry = new THREE.PlaneGeometry(2.4, 1.6).rotateX(-Math.PI / 2);
+scanGroup.add(
+    new THREE.Mesh(
+        scanGeometry,
+        new THREE.MeshBasicMaterial({
+            color: COLORS.cyan,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            toneMapped: false
+        })
+    )
+);
+scanGroup.add(
+    new THREE.LineSegments(new THREE.EdgesGeometry(scanGeometry), hologramMaterial)
+);
+scene.add(scanGroup);
+hologramParts.push(scanGroup);
+
+scene.add(new THREE.AmbientLight("#ffffff", 0.3));
+
+const keyLight = new THREE.DirectionalLight("#ffffff", 2.2);
+keyLight.position.set(3, 4, 5);
+scene.add(keyLight);
+
+const cyanLight = new THREE.PointLight(COLORS.cyan, 20, 10);
 cyanLight.position.set(-3, 1, 2);
 scene.add(cyanLight);
 
-const orangeLight = new THREE.PointLight("#ff8a00", 8, 8);
+const orangeLight = new THREE.PointLight(COLORS.orange, 14, 10);
 orangeLight.position.set(3, -1, -2);
 scene.add(orangeLight);
-
-scene.add(new THREE.AmbientLight("#ffffff", 1));
-
-
-const resetButton = document.querySelector("#reset-view");
-const hologramButton = document.querySelector("#toggle-hologram");
-const explodedButton = document.querySelector("#toggle-exploded");
-
-const rpmValue = document.querySelector("#rpm-value");
-const tempValue = document.querySelector("#temp-value");
-const boostValue = document.querySelector("#boost-value");
-
-const rpmBar = document.querySelector("#rpm-bar");
-const tempBar = document.querySelector("#temp-bar");
-const boostBar = document.querySelector("#boost-bar");
-
-const hologramParts = [
-    blockWireframe,
-    headWireframe,
-    oilPanWireframe
-];
-
-let hologramEnabled = true;
-let exploded = false;
-
-const cameraStart = new THREE.Vector3(3, 2, 5);
-const targetStart = new THREE.Vector3(0, 0, 0);
-
-const cylinderParts = engineGroup.children.filter(
-    part => part.geometry === cylinderGeometry
-);
-
-const exhaustParts = engineGroup.children.filter(
-    part => part.geometry === exhaustGeometry
-);
 
 const movableParts = [
     {
@@ -276,23 +492,19 @@ const movableParts = [
     {
         object: oilPan,
         wireframe: oilPanWireframe,
-        offset: new THREE.Vector3(0, -0.9, 0)
+        offset: new THREE.Vector3(0, -0.7, 0)
+    },
+    {
+        object: pulleyGroup,
+        offset: new THREE.Vector3(0.8, 0, 0)
     },
     ...cylinderParts.map((object, index) => ({
         object,
-        offset: new THREE.Vector3(
-            0,
-            0.65,
-            index % 2 === 0 ? 0.35 : -0.35
-        )
+        offset: new THREE.Vector3(0, 0.65, index % 2 === 0 ? 0.35 : -0.35)
     })),
     ...exhaustParts.map((object, index) => ({
         object,
-        offset: new THREE.Vector3(
-            0,
-            -0.15,
-            index % 2 === 0 ? -1.0 : -1.35
-        )
+        offset: new THREE.Vector3(0, -0.15, index % 2 === 0 ? -1.0 : -1.35)
     }))
 ];
 
@@ -301,80 +513,70 @@ for (const part of movableParts) {
     part.destination = part.start.clone();
 }
 
-resetButton?.addEventListener("click", () => {
-    camera.position.copy(cameraStart);
-    controls.target.copy(targetStart);
-    controls.update();
-});
+const sim = {
+    running: true,
+    rpm: 0,
+    temp: 40,
+    boost: 0,
+    crankDeg: 0
+};
 
-hologramButton?.addEventListener("click", () => {
-    hologramEnabled = !hologramEnabled;
+let hologramEnabled = true;
+let exploded = false;
+let lastTime = 0;
+let telemetryClock = 0;
 
-    hologramParts.forEach(part => {
-        part.visible = hologramEnabled;
-    });
-
-    hologramButton.textContent = hologramEnabled
-        ? "HOLOGRAM: ON"
-        : "HOLOGRAM: OFF";
-
-    hologramButton.classList.toggle("active", hologramEnabled);
-});
-
-explodedButton?.addEventListener("click", () => {
-    exploded = !exploded;
-
-    movableParts.forEach(part => {
-        part.destination = exploded
-            ? part.start.clone().add(part.offset)
-            : part.start.clone();
-    });
-
-    explodedButton.textContent = exploded
-        ? "ASSEMBLE ENGINE"
-        : "EXPLODED VIEW";
-
-    explodedButton.classList.toggle("active", exploded);
-});
-
-function updateTelemetry(time) {
-    const rpm = Math.round(
-        2200 + Math.sin(time * 0.0012) * 1400
-    );
-
-    const temperature = Math.round(
-        88 + Math.sin(time * 0.00045) * 5
-    );
-
-    const boost = Math.max(
-        0.1,
-        0.8 + Math.sin(time * 0.0015) * 0.65
-    );
-
-    if (rpmValue) rpmValue.textContent = rpm;
-    if (tempValue) tempValue.textContent = temperature;
-    if (boostValue) boostValue.textContent = boost.toFixed(1);
-
-    if (rpmBar) rpmBar.style.width = `${(rpm / 7000) * 100}%`;
-    if (tempBar) tempBar.style.width = `${(temperature / 130) * 100}%`;
-    if (boostBar) boostBar.style.width = `${(boost / 2) * 100}%`;
-
-    const gaugeText = document.querySelector("#gauge-text");
-    const gaugePath = document.querySelector("#gauge-value");
-
-    if (gaugeText) gaugeText.textContent = rpm;
-
-    if (gaugePath) {
-        const progress = Math.min(rpm / 7000, 1);
-        const circumference = Math.PI * 80;
-        gaugePath.style.strokeDasharray =
-            `${circumference * progress} ${circumference}`;
-    }
+function approach(current, target, rate, dt) {
+    return current + (target - current) * (1 - Math.exp(-rate * dt));
 }
 
-function updateExplodedView() {
-    movableParts.forEach(part => {
-        part.object.position.lerp(part.destination, 0.07);
+function updateSimulation(time, dt) {
+    const targetRpm = sim.running
+        ? Math.max(800,
+            3200 + Math.sin(time * 0.0012) * 2200 + Math.sin(time * 0.0031) * 500)
+        : 0;
+    const targetTemp = sim.running ? 88 + Math.sin(time * 0.00045) * 5 : 35;
+    const targetBoost = sim.running
+        ? Math.max(0.1, 0.8 + Math.sin(time * 0.0015) * 0.65)
+        : 0;
+
+    sim.rpm = approach(sim.rpm, targetRpm, 3, dt);
+    sim.temp = approach(sim.temp, targetTemp, 0.15, dt);
+    sim.boost = approach(sim.boost, targetBoost, 2, dt);
+
+    sim.crankDeg = (sim.crankDeg + (sim.rpm * 6 / SLOW_MOTION) * dt) % 720;
+}
+
+function updateEngineVisuals(time) {
+    const crank = sim.crankDeg;
+    const idleFade = Math.min(sim.rpm / 800, 1);
+
+    cylinderMaterials.forEach((material, i) => {
+        const phase = (((crank - FIRING_OFFSETS[i]) % 720) + 720) % 720 / 720;
+        const burn = phase < 0.25 ? 1 - phase / 0.25 : 0;
+        material.emissiveIntensity = burn * burn * 2.2 * idleFade;
+    });
+
+    pulleySpinner.rotation.x = THREE.MathUtils.degToRad(crank);
+
+    if (prefersReducedMotion) return;
+
+    const load = sim.rpm / MAX_RPM;
+    engineGroup.position.x = Math.cos(time * 0.057) * SHAKE_AMOUNT * load;
+    engineGroup.position.y = Math.sin(time * 0.045) * SHAKE_AMOUNT * load;
+
+    const pulse = (time % 3000) / 3000;
+    pulseRing.scale.setScalar(0.3 + pulse * 0.7);
+    pulseRing.material.opacity = (1 - pulse) * 0.5;
+
+    scanGroup.position.y = 0.05 + Math.sin(time * 0.0008) * 1.0;
+}
+
+function updateExplodedView(dt) {
+    const k = 1 - Math.exp(-6 * dt);
+
+    movableParts.forEach((part) => {
+        part.object.position.lerp(part.destination, k);
 
         if (part.wireframe) {
             part.wireframe.position.copy(part.object.position);
@@ -382,31 +584,215 @@ function updateExplodedView() {
     });
 }
 
+function renderTelemetry(dt) {
+    telemetryClock += dt;
+    if (telemetryClock < 0.1) return;
+    telemetryClock = 0;
 
-function animate(time = 0) {
-    requestAnimationFrame(animate);
+    const rpm = Math.round(sim.rpm);
+    const temperature = Math.round(sim.temp);
+
+    if (ui.rpmValue) ui.rpmValue.textContent = rpm;
+    if (ui.tempValue) ui.tempValue.textContent = temperature;
+    if (ui.boostValue) ui.boostValue.textContent = sim.boost.toFixed(1);
+
+    if (ui.rpmBar) ui.rpmBar.style.width = `${Math.min(rpm / MAX_RPM, 1) * 100}%`;
+    if (ui.tempBar) ui.tempBar.style.width = `${Math.min(temperature / 130, 1) * 100}%`;
+    if (ui.boostBar) ui.boostBar.style.width = `${Math.min(sim.boost / 2, 1) * 100}%`;
+
+    if (ui.gaugeText) ui.gaugeText.textContent = rpm;
+
+    if (ui.gaugePath) {
+
+        const progress = Math.min(rpm / MAX_RPM, 1);
+        ui.gaugePath.style.strokeDasharray = `${GAUGE_ARC}`;
+        ui.gaugePath.style.strokeDashoffset = `${GAUGE_ARC * (1 - progress)}`;
+    }
+}
+
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let selectedPart = null;
+
+const selectionOutline = new THREE.LineSegments(
+    new THREE.BufferGeometry(),
+    new THREE.LineBasicMaterial({
+        color: COLORS.orange,
+        depthTest: false,
+        toneMapped: false
+    })
+);
+selectionOutline.renderOrder = 10;
+
+function showPartInfo(partName) {
+    const info = componentInfo[partName];
+
+    if (ui.partName) {
+        ui.partName.textContent = info ? partName.toUpperCase() : "NO PART SELECTED";
+    }
+    if (ui.partDescription) {
+        ui.partDescription.textContent = info
+            ? info.description
+            : "Click a component on the engine to inspect it.";
+    }
+    if (ui.partMaterial) ui.partMaterial.textContent = info ? info.material : "—";
+    if (ui.partFunction) ui.partFunction.textContent = info ? info.function : "—";
+}
+
+function selectPart(mesh) {
+    selectionOutline.removeFromParent();
+    selectionOutline.geometry.dispose();
+    selectedPart = mesh;
+
+    if (mesh) {
+        mesh.geometry.computeBoundingBox();
+        const size = mesh.geometry.boundingBox.getSize(new THREE.Vector3());
+        const center = mesh.geometry.boundingBox.getCenter(new THREE.Vector3());
+
+        selectionOutline.geometry = new THREE.EdgesGeometry(
+            new THREE.BoxGeometry(size.x, size.y, size.z)
+        );
+        selectionOutline.position.copy(center);
+        selectionOutline.scale.setScalar(1.08);
+        mesh.add(selectionOutline);
+    }
+
+    showPartInfo(mesh ? mesh.userData.partName : null);
+}
+
+function setPointerFromEvent(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+function pickPart() {
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(pickableParts, false);
+    return hits.length > 0 ? hits[0].object : null;
+}
+
+let pointerDownAt = null;
+
+renderer.domElement.addEventListener("pointerdown", (event) => {
+    pointerDownAt = { x: event.clientX, y: event.clientY };
+});
+
+renderer.domElement.addEventListener("pointerup", (event) => {
+    if (!pointerDownAt) return;
+
+    const moved = Math.hypot(
+        event.clientX - pointerDownAt.x,
+        event.clientY - pointerDownAt.y
+    );
+    pointerDownAt = null;
+
+    if (moved > 5) return;
+
+    setPointerFromEvent(event);
+    const hit = pickPart();
+    selectPart(hit === selectedPart ? null : hit);
+});
+
+renderer.domElement.addEventListener("pointermove", (event) => {
+    if (event.buttons) return;
+    setPointerFromEvent(event);
+    renderer.domElement.style.cursor = pickPart() ? "pointer" : "grab";
+});
+
+showPartInfo(null);
+
+ui.reset?.addEventListener("click", () => {
+    camera.position.copy(cameraStart);
+    controls.target.copy(targetStart);
+    controls.update();
+});
+
+ui.hologram?.addEventListener("click", () => {
+    hologramEnabled = !hologramEnabled;
+
+    hologramParts.forEach((part) => {
+        part.visible = hologramEnabled;
+    });
+
+    ui.hologram.textContent = hologramEnabled ? "HOLOGRAM: ON" : "HOLOGRAM: OFF";
+    ui.hologram.classList.toggle("active", hologramEnabled);
+});
+
+ui.exploded?.addEventListener("click", () => {
+    exploded = !exploded;
+
+    movableParts.forEach((part) => {
+        part.destination = exploded
+            ? part.start.clone().add(part.offset)
+            : part.start.clone();
+    });
+
+    ui.exploded.textContent = exploded ? "ASSEMBLE ENGINE" : "EXPLODED VIEW";
+    ui.exploded.classList.toggle("active", exploded);
+});
+
+function syncEngineButton() {
+    if (!ui.engine) return;
+    ui.engine.textContent = sim.running ? "ENGINE: RUNNING" : "ENGINE: OFF";
+    ui.engine.classList.toggle("active", sim.running);
+}
+
+ui.engine?.addEventListener("click", () => {
+    sim.running = !sim.running;
+    syncEngineButton();
+});
+
+syncEngineButton();
+
+function animate(time) {
+
+    const dt = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
 
     controls.update();
-    updateExplodedView();
-    updateTelemetry(time);
+    updateSimulation(time, dt);
+    updateEngineVisuals(time);
+    updateExplodedView(dt);
+    renderTelemetry(dt);
 
     renderer.render(scene, camera);
+}
+
+let isLooping = false;
+
+function startLoop() {
+    if (isLooping) return;
+    isLooping = true;
+    lastTime = performance.now();
+    renderer.setAnimationLoop(animate);
+}
+
+function stopLoop() {
+    isLooping = false;
+    renderer.setAnimationLoop(null);
 }
 
 function resizeRenderer() {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    if (width === 0 || height === 0) {
-        return;
-    }
+    if (width === 0 || height === 0) return;
 
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height);
 }
 
-window.addEventListener("resize", resizeRenderer);
+new ResizeObserver(resizeRenderer).observe(container);
+
+new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+        startLoop();
+    } else {
+        stopLoop();
+    }
+}).observe(container);
 
 resizeRenderer();
-animate();
+startLoop();
