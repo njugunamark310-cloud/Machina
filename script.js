@@ -491,6 +491,21 @@ turboShaft.rotation.x = Math.PI / 2;
 turboShaft.position.set(0.65, -0.05, -0.94);
 turboGroup.add(turboShaft);
 
+const turboInletMaterial = new THREE.MeshStandardMaterial({
+    color: 0xc16b3b,
+    metalness: 0.8,
+    roughness: 0.3
+});
+
+const turboInletPipe = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.075, 0.095, 0.42, 20),
+    turboInletMaterial
+);
+
+turboInletPipe.position.set(0.35, -0.08, -1.08);
+turboInletPipe.rotation.z = Math.PI / 3;
+turboGroup.add(turboInletPipe);
+
 engineGroup.add(turboGroup);
 
 const compressorWheel = new THREE.Group();
