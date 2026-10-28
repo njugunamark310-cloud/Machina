@@ -199,6 +199,154 @@ scene.add(orangeLight);
 
 scene.add(new THREE.AmbientLight("#ffffff", 1));
 
+
+const resetButton = document.querySelector("#reset-view");
+const hologramButton = document.querySelector("#toggle-hologram");
+const explodedButton = document.querySelector("#toggle-exploded");
+
+const rpmValue = document.querySelector("#rpm-value");
+const tempValue = document.querySelector("#temp-value");
+const boostValue = document.querySelector("#boost-value");
+
+const rpmBar = document.querySelector("#rpm-bar");
+const tempBar = document.querySelector("#temp-bar");
+const boostBar = document.querySelector("#boost-bar");
+
+const hologramParts = [
+    blockWireframe,
+    headWireframe,
+    oilPanWireframe
+];
+
+let hologramEnabled = true;
+let exploded = false;
+
+const cameraStart = new THREE.Vector3(3, 2, 5);
+const targetStart = new THREE.Vector3(0, 0, 0);
+
+const cylinderParts = engineGroup.children.filter(
+    part => part.geometry === cylinderGeometry
+);
+
+const exhaustParts = engineGroup.children.filter(
+    part => part.geometry === exhaustGeometry
+);
+
+const movableParts = [
+    {
+        object: cylinderHead,
+        wireframe: headWireframe,
+        offset: new THREE.Vector3(0, 1.1, 0)
+    },
+    {
+        object: oilPan,
+        wireframe: oilPanWireframe,
+        offset: new THREE.Vector3(0, -0.9, 0)
+    },
+    ...cylinderParts.map((object, index) => ({
+        object,
+        offset: new THREE.Vector3(
+            0,
+            0.65,
+            index % 2 === 0 ? 0.35 : -0.35
+        )
+    })),
+    ...exhaustParts.map((object, index) => ({
+        object,
+        offset: new THREE.Vector3(
+            0,
+            -0.15,
+            index % 2 === 0 ? -1.0 : -1.35
+        )
+    }))
+];
+
+for (const part of movableParts) {
+    part.start = part.object.position.clone();
+    part.destination = part.start.clone();
+}
+
+resetButton?.addEventListener("click", () => {
+    camera.position.copy(cameraStart);
+    controls.target.copy(targetStart);
+    controls.update();
+});
+
+hologramButton?.addEventListener("click", () => {
+    hologramEnabled = !hologramEnabled;
+
+    hologramParts.forEach(part => {
+        part.visible = hologramEnabled;
+    });
+
+    hologramButton.textContent = hologramEnabled
+        ? "HOLOGRAM: ON"
+        : "HOLOGRAM: OFF";
+
+    hologramButton.classList.toggle("active", hologramEnabled);
+});
+
+explodedButton?.addEventListener("click", () => {
+    exploded = !exploded;
+
+    movableParts.forEach(part => {
+        part.destination = exploded
+            ? part.start.clone().add(part.offset)
+            : part.start.clone();
+    });
+
+    explodedButton.textContent = exploded
+        ? "ASSEMBLE ENGINE"
+        : "EXPLODED VIEW";
+
+    explodedButton.classList.toggle("active", exploded);
+});
+
+function updateTelemetry(time) {
+    const rpm = Math.round(
+        2200 + Math.sin(time * 0.0012) * 1400
+    );
+
+    const temperature = Math.round(
+        88 + Math.sin(time * 0.00045) * 5
+    );
+
+    const boost = Math.max(
+        0.1,
+        0.8 + Math.sin(time * 0.0015) * 0.65
+    );
+
+    if (rpmValue) rpmValue.textContent = rpm;
+    if (tempValue) tempValue.textContent = temperature;
+    if (boostValue) boostValue.textContent = boost.toFixed(1);
+
+    if (rpmBar) rpmBar.style.width = `${(rpm / 7000) * 100}%`;
+    if (tempBar) tempBar.style.width = `${(temperature / 130) * 100}%`;
+    if (boostBar) boostBar.style.width = `${(boost / 2) * 100}%`;
+
+    const gaugeText = document.querySelector("#gauge-text");
+    const gaugePath = document.querySelector("#gauge-value");
+
+    if (gaugeText) gaugeText.textContent = rpm;
+
+    if (gaugePath) {
+        const progress = Math.min(rpm / 7000, 1);
+        const circumference = Math.PI * 80;
+        gaugePath.style.strokeDasharray =
+            `${circumference * progress} ${circumference}`;
+    }
+}
+
+function updateExplodedView() {
+    movableParts.forEach(part => {
+        part.object.position.lerp(part.destination, 0.07);
+
+        if (part.wireframe) {
+            part.wireframe.position.copy(part.object.position);
+        }
+    });
+}
+
 function animate() {
     requestAnimationFrame(animate);
     controls.update();

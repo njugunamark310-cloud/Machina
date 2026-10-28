@@ -133,6 +133,49 @@
         <span class="sim-tag">3D SIMULATION</span>
     </div>
 
+
+<div class="engine-controls">
+    <button class="btn engine-btn" id="reset-view">RESET VIEW</button>
+    <button class="btn engine-btn" id="toggle-hologram">HOLOGRAM: ON</button>
+    <button class="btn engine-btn" id="toggle-exploded">EXPLODED VIEW</button>
+</div>
+
+<div class="telemetry-panel">
+    <div class="telemetry-heading">
+        <p class="eyebrow">ENGINE TELEMETRY</p>
+        <span class="sim-tag">SIMULATED DATA</span>
+    </div>
+
+    <div class="telemetry-grid">
+        <article class="telemetry-card">
+            <p class="stat-label">ENGINE SPEED</p>
+            <p class="telemetry-value"><span id="rpm-value">1200</span> <small>RPM</small></p>
+            <div class="telemetry-track">
+                <div class="telemetry-fill" id="rpm-bar"></div>
+            </div>
+        </article>
+
+        <article class="telemetry-card">
+            <p class="stat-label">COOLANT TEMP</p>
+            <p class="telemetry-value"><span id="temp-value">82</span> <small>°C</small></p>
+            <div class="telemetry-track">
+                <div class="telemetry-fill temperature-fill" id="temp-bar"></div>
+            </div>
+        </article>
+
+        <article class="telemetry-card">
+            <p class="stat-label">BOOST PRESSURE</p>
+            <p class="telemetry-value"><span id="boost-value">0.6</span> <small>bar</small></p>
+            <div class="telemetry-track">
+                <div class="telemetry-fill boost-fill" id="boost-bar"></div>
+            </div>
+        </article>
+    </div>
+
+    <p class="telemetry-note">Illustrative simulation only — not live engine measurements.</p>
+</div>
+
+
     <div id="engine-canvas" class="engine-canvas">
         <p class="engine-loading">INITIALIZING 3D ENGINE...</p>
     </div>

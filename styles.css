@@ -303,3 +303,110 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
     cursor: grabbing;
 }
 
+
+.engine-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+
+.engine-btn {
+    margin-top: 0;
+    font-size: 0.7rem;
+}
+
+.engine-btn.active {
+    background: var(--cyan);
+    color: var(--bg-deep);
+    box-shadow: 0 0 16px rgba(0, 229, 255, 0.22);
+}
+
+.telemetry-panel {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border);
+    background: rgba(5, 8, 15, 0.7);
+}
+
+.telemetry-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.telemetry-card {
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    background: var(--bg-panel);
+}
+
+.telemetry-value {
+    margin: 0.5rem 0 0.75rem;
+    color: var(--text);
+    font-size: clamp(1.35rem, 3vw, 2rem);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.telemetry-value small {
+    color: var(--text-dim);
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+
+.telemetry-track {
+    height: 5px;
+    overflow: hidden;
+    background: #172538;
+    border-radius: 5px;
+}
+
+.telemetry-fill {
+    width: 30%;
+    height: 100%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+    transition: width 0.4s ease;
+}
+
+.temperature-fill {
+    background: var(--orange);
+    box-shadow: 0 0 10px rgba(255, 138, 0, 0.35);
+}
+
+.boost-fill {
+    background: var(--blue);
+    box-shadow: 0 0 10px rgba(41, 121, 255, 0.4);
+}
+
+.telemetry-note {
+    margin-top: 1rem;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+}
+
+@media (max-width: 600px) {
+    .telemetry-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .telemetry-heading {
+        align-items: flex-start;
+    }
+
+    .engine-btn {
+        flex: 1 1 140px;
+    }
+}
+
