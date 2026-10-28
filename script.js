@@ -105,11 +105,15 @@ engineGroup.add(headWireframe);
 
 const cylinderGeometry = new THREE.CylinderGeometry(0.19, 0.19, 0.65, 24);
 
+
 const cylinderMaterial = new THREE.MeshStandardMaterial({
-    color: "#26394b",
-    metalness: 0.8,
-    roughness: 0.3
+    color: "#60758a",
+    metalness: 0.9,
+    roughness: 0.24,
+    emissive: "#071522",
+    emissiveIntensity: 0.35
 });
+
 
 for (let i = 0; i < 4; i++) {
     const cylinder = new THREE.Mesh(
@@ -132,9 +136,7 @@ scene.add(new THREE.AmbientLight("#ffffff", 1));
 function animate() {
     requestAnimationFrame(animate);
 
-    cube.rotation.x += 0.005;
-    cube.rotation.y += 0.01;
-
+    controls.update();
     renderer.render(scene, camera);
 }
 
