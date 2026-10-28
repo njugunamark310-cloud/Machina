@@ -458,6 +458,41 @@ exhaustManifoldGroup.add(exhaustCollector);
 
 engineGroup.add(exhaustManifoldGroup);
 
+const turboGroup = new THREE.Group();
+
+const turboHousingMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8998a5,
+    metalness: 0.9,
+    roughness: 0.24
+});
+// turbo 
+const turbineHousing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.24, 0.09, 16, 32),
+    turboHousingMaterial
+);
+
+turbineHousing.position.set(0.65, -0.05, -1.1);
+turboGroup.add(turbineHousing);
+
+const compressorHousing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.2, 0.075, 16, 32),
+    turboHousingMaterial
+);
+
+compressorHousing.position.set(0.65, -0.05, -0.78);
+turboGroup.add(compressorHousing);
+
+const turboShaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.045, 0.045, 0.38, 20),
+    boltMaterial
+);
+
+turboShaft.rotation.x = Math.PI / 2;
+turboShaft.position.set(0.65, -0.05, -0.94);
+turboGroup.add(turboShaft);
+
+engineGroup.add(turboGroup);
+
 
 
 const badge = new THREE.Mesh(
