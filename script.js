@@ -315,6 +315,41 @@ for (let i = 0; i < 6; i++) {
     cylinderHead.add(bolt);
 }
 
+
+const camshaftGroup = new THREE.Group();
+
+const camshaftMaterial = new THREE.MeshStandardMaterial({
+    color: 0x9ba8b5,
+    metalness: 0.9,
+    roughness: 0.24
+});
+
+for (let shaftIndex = 0; shaftIndex < 2; shaftIndex++) {
+    const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.045, 0.045, 1.45, 24),
+        camshaftMaterial
+    );
+
+    shaft.rotation.z = Math.PI / 2;
+    shaft.position.set(0, 0, -0.25 + shaftIndex * 0.5);
+    camshaftGroup.add(shaft);
+
+    for (let i = 0; i < 4; i++) {
+        const lobe = new THREE.Mesh(
+            new THREE.SphereGeometry(0.085, 16, 12),
+            boltMaterial
+        );
+
+        lobe.scale.set(1, 1.5, 0.8);
+        lobe.position.set(-0.52 + i * 0.35, 0.035, -0.25 + shaftIndex * 0.5);
+        camshaftGroup.add(lobe);
+    }
+}
+
+camshaftGroup.position.y = 1.17;
+engineGroup.add(camshaftGroup);
+
+
 const badge = new THREE.Mesh(
     new THREE.PlaneGeometry(1.0, 0.25),
     new THREE.MeshBasicMaterial({
@@ -400,7 +435,25 @@ for (let i = 0; i < 4; i++) {
 
     piston.position.set(-0.54 + i * 0.36, 0.38, 0);
     crankshaftGroup.add(piston);
+
+    for (let ringIndex = 0; ringIndex < 3; ringIndex++) {
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(0.148, 0.009, 8, 32),
+            boltMaterial
+        );
+
+        ring.rotation.x = Math.PI / 2;
+        ring.position.set(
+            -0.54 + i * 0.36,
+            0.45 + ringIndex * 0.055,
+            0
+        );
+
+        crankshaftGroup.add(ring);
+    }
 }
+
+
 
 crankshaftGroup.position.y = -0.25;
 engineGroup.add(crankshaftGroup);
