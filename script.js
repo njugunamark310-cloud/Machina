@@ -43,14 +43,59 @@ const engineBlock = new THREE.Mesh(blockGeometry, engineMaterial);
 
 engineGroup.add(engineBlock);
 
-
-const blockEdges = new THREE.EdgesGeometry(blockGeometry);
-
 const hologramMaterial = new THREE.LineBasicMaterial({
     color: "#00e5ff",
     transparent: true,
     opacity: 0.9
 });
+
+const oilPanGeometry = new THREE.BoxGeometry(1.35, 0.38, 1.0);
+
+const oilPanMaterial = new THREE.MeshStandardMaterial({
+    color: "#354657",
+    metalness: 0.85,
+    roughness: 0.32
+});
+
+const oilPan = new THREE.Mesh(oilPanGeometry, oilPanMaterial);
+oilPan.position.set(0, -0.85, 0);
+engineGroup.add(oilPan);
+
+const sideBoltGeometry = new THREE.CylinderGeometry(0.045, 0.045, 0.06, 12);
+
+const sideBoltMaterial = new THREE.MeshStandardMaterial({
+    color: "#c0ccd8",
+    metalness: 1,
+    roughness: 0.2
+});
+
+for (let i = 0; i < 3; i++) {
+    const sideBolt = new THREE.Mesh(
+        sideBoltGeometry,
+        sideBoltMaterial
+    );
+
+    sideBolt.rotation.x = Math.PI / 2;
+    sideBolt.position.set(-0.48 + i * 0.48, -0.85, 0.53);
+    engineGroup.add(sideBolt);
+}
+
+const oilPanEdges = new THREE.EdgesGeometry(oilPanGeometry);
+const oilPanWireframe = new THREE.LineSegments(
+    oilPanEdges,
+    hologramMaterial
+);
+oilPanWireframe.position.copy(oilPan.position);
+oilPanWireframe.scale.setScalar(1.003);
+engineGroup.add(oilPanWireframe);
+
+
+
+
+
+const blockEdges = new THREE.EdgesGeometry(blockGeometry);
+
+
 
 const blockWireframe = new THREE.LineSegments(
     blockEdges,
