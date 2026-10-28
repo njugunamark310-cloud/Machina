@@ -492,19 +492,72 @@ turboShaft.position.set(0.65, -0.05, -0.94);
 turboGroup.add(turboShaft);
 
 const turboInletMaterial = new THREE.MeshStandardMaterial({
-    color: 0xc16b3b,
-    metalness: 0.8,
-    roughness: 0.3
+    color: 0x8998a5,
+    metalness: 0.92,
+    roughness: 0.2
 });
 
-const turboInletPipe = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.095, 0.42, 20),
+const inletElbow = new THREE.Group();
+
+const inletSection = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.105, 0.075, 0.22, 32),
     turboInletMaterial
 );
+inletSection.rotation.x = Math.PI / 2;
+inletSection.position.z = 0.08;
+inletElbow.add(inletSection);
 
-turboInletPipe.position.set(0.35, -0.08, -1.08);
-turboInletPipe.rotation.z = Math.PI / 3;
-turboGroup.add(turboInletPipe);
+const inletLip = new THREE.Mesh(
+    new THREE.TorusGeometry(0.105, 0.018, 12, 32),
+    turboInletMaterial
+);
+inletLip.position.z = 0.19;
+inletElbow.add(inletLip);
+
+inletElbow.position.set(0.65, -0.05, -1.28);
+turboGroup.add(inletElbow);
+
+const turboOutletMaterial = new THREE.MeshStandardMaterial({
+    color: 0x168da5,
+    metalness: 0.75,
+    roughness: 0.28
+});
+
+const turboOutletPipe = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.065, 0.08, 0.5, 20),
+    turboOutletMaterial
+);
+
+turboOutletPipe.position.set(0.65, 0.12, -0.48);
+turboOutletPipe.rotation.x = Math.PI / 2;
+turboGroup.add(turboOutletPipe);
+
+const boostFlowGroup = new THREE.Group();
+
+const boostParticleMaterial = new THREE.MeshBasicMaterial({
+    color: 0x48e5ff,
+    transparent: true,
+    opacity: 0.85
+});
+
+const boostParticleGeometry = new THREE.SphereGeometry(0.025, 12, 12);
+
+for (let i = 0; i < 12; i++) {
+    const particle = new THREE.Mesh(
+        boostParticleGeometry,
+        boostParticleMaterial
+    );
+
+    particle.position.set(
+        0.65 + Math.sin(i * 2.4) * 0.045,
+        0.12 + Math.cos(i * 1.7) * 0.045,
+        -0.72 + i * 0.035
+    );
+
+    boostFlowGroup.add(particle);
+}
+
+turboGroup.add(boostFlowGroup);
 
 engineGroup.add(turboGroup);
 
@@ -1134,6 +1187,16 @@ function animate(time) {
     updateEngineVisuals(time);
     updateExplodedView(dt);
     renderTelemetry(dt);
+    compressorWheel.rotation.z += dt * 8;
+    turbineWheel.rotation.z -= dt * 8;
+
+    boostFlowGroup.children.forEach((particle, i) => {
+    particle.position.z += dt * 0.8;
+
+    if (particle.position.z > -0.25) {
+        particle.position.z = -0.72;
+    }
+});
 
     renderer.render(scene, camera);
 }
