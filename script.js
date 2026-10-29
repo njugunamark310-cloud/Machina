@@ -1489,6 +1489,10 @@ function updateEngineVisuals(time, dt) {
 
     pulleySpinner.rotation.x = THREE.MathUtils.degToRad(crank);
 
+        accessoryPulleys.forEach((pulley) => {
+        pulley.spinner.rotation.x = DEG * crank * (0.42 / pulley.radius);
+    });
+
     const load = sim.rpm / MAX_RPM;
     const heat = clamp(sim.rpm / 5500, 0, 1);
     exhaustHeatMaterial.emissiveIntensity = heat * heat * 3;
@@ -1811,6 +1815,39 @@ ui.labels?.addEventListener("click", () => {
     ui.labels.classList.toggle("active", labelsEnabled);
 });
 
+renderer.localClippingEnabled = true;
+
+const cutPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 3);
+const cutawayMaterials = [
+    engineMaterial,
+    headMaterial,
+    oilPanMaterial,
+    intakeMaterial,
+    oilFilterMaterial,
+    ...cylinderMaterials
+];
+let cutawayEnabled = false;
+let cutPlaneTarget = 3;
+
+cutawayMaterials.forEach((material) => {
+    material.clippingPlanes = [cutPlane];
+    material.clipShadows = true;
+});
+hologramMaterial.clippingPlanes = [cutPlane];
+
+ui.cutaway?.addEventListener("click", () => {
+    cutawayEnabled = !cutawayEnabled;
+    cutPlaneTarget = cutawayEnabled ? 0 : 3;
+
+    cutawayMaterials.forEach((material) => {
+        material.side = cutawayEnabled ? THREE.DoubleSide : THREE.FrontSide;
+        material.needsUpdate = true;
+    });
+
+    ui.cutaway.textContent = cutawayEnabled ? "CUTAWAY: ON" : "CUTAWAY: OFF";
+    ui.cutaway.classList.toggle("active", cutawayEnabled);
+});
+
 
 
 function animate(time) {
@@ -1824,6 +1861,8 @@ function animate(time) {
     updateEngineVisuals(time, dt);
     updateExplodedView(dt);
     renderTelemetry(dt);
+
+    cutPlane.constant = approach(cutPlane.constant, cutPlaneTarget, 4, dt);
 
     composer.render(dt);
 }
