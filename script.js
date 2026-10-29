@@ -65,13 +65,13 @@ const ui = {
     rpmSlider: $("#rpm-slider"),
     boostSlider: $("#boost-slider"),
     auto: $("#toggle-auto"),
+    labels: $("#toggle-labels"),
+    cutaway: $("#toggle-cutaway"),
+    sound: $("#toggle-sound"),
+    quality: $("#toggle-quality"),
 
     
 };
-
-
-
-
 
 const STROKES = ["POWER", "EXHAUST", "INTAKE", "COMPRESSION"];
 const strokeLabels = [0, 1, 2, 3].map((i) => $(`#stroke-${i}`));
@@ -125,8 +125,7 @@ const composerTarget = new THREE.WebGLRenderTarget(
 );
 const composer = new EffectComposer(renderer, composerTarget);
 composer.addPass(new RenderPass(scene, camera));
-composer.addPass(
-    new UnrealBloomPass(
+const bloomPass = new UnrealBloomPass(
         new THREE.Vector2(
             Math.max(1, container.clientWidth),
             Math.max(1, container.clientHeight)
@@ -134,8 +133,8 @@ composer.addPass(
         0.55,
         0.65,
         0.82
-    )
-);
+    );
+composer.addPass(bloomPass);
 composer.addPass(new OutputPass());
 
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -1540,7 +1539,6 @@ function updateEngineVisuals(time, dt) {
     const outlinePulse = 0.75 + Math.sin(time * 0.006) * 0.25;
     selectionOutline.material.opacity = outlinePulse;
 
-    
 }
 
 function updateExplodedView(dt) {
@@ -1598,7 +1596,7 @@ function renderTelemetry(dt) {
         label.dataset.stroke = name;
         label.textContent = name;
     }
-    
+
 });
 
 }
@@ -1657,12 +1655,10 @@ function showPartInfo(partName) {
     }
     if (ui.partMaterial) ui.partMaterial.textContent = info ? info.material : "—";
     if (ui.partFunction) ui.partFunction.textContent = info ? info.function : "—";
+
     
-    
-    
+
 }
-
-
 
 function selectPart(mesh) {
     selectedPart = mesh;
@@ -1848,7 +1844,129 @@ ui.cutaway?.addEventListener("click", () => {
     ui.cutaway.classList.toggle("active", cutawayEnabled);
 });
 
+const audio = { context: null, enabled: false };
 
+function startAudio() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const context = new AudioContextClass();
+
+    const master = context.createGain();
+    master.gain.value = 0;
+
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.Q.value = 4;
+
+    const saw = context.createOscillator();
+    saw.type = "sawtooth";
+
+    const sub = context.createOscillator();
+    sub.type = "square";
+    const subGain = context.createGain();
+    subGain.gain.value = 0.4;
+
+    const whistle = context.createOscillator();
+    whistle.type = "sine";
+    const whistleGain = context.createGain();
+    whistleGain.gain.value = 0;
+
+    saw.connect(filter);
+    sub.connect(subGain);
+    subGain.connect(filter);
+    filter.connect(master);
+    whistle.connect(whistleGain);
+    whistleGain.connect(master);
+    master.connect(context.destination);
+
+    [saw, sub, whistle].forEach((oscillator) => oscillator.start());
+
+    Object.assign(audio, { context, master, filter, saw, sub, whistle, whistleGain });
+}
+
+function updateAudio() {
+    if (!audio.context) return;
+
+    const now = audio.context.currentTime;
+    const firingHz = (Math.max(sim.rpm, 1) / 60) * 2;
+    const level = audio.enabled && sim.rpm > 50 ? 0.04 + (sim.rpm / MAX_RPM) * 0.08 : 0;
+
+    audio.saw.frequency.setTargetAtTime(firingHz, now, 0.05);
+    audio.sub.frequency.setTargetAtTime(firingHz / 2, now, 0.05);
+    audio.filter.frequency.setTargetAtTime(250 + sim.rpm * 0.35, now, 0.08);
+    audio.master.gain.setTargetAtTime(level, now, 0.1);
+    audio.whistle.frequency.setTargetAtTime(1800 + sim.boost * 2500, now, 0.1);
+    audio.whistleGain.gain.setTargetAtTime(clamp(sim.boost / 2, 0, 1) * 0.12, now, 0.1);
+}
+
+ui.sound?.addEventListener("click", async () => {
+    if (!audio.context) startAudio();
+    if (!audio.context) return;
+
+    await audio.context.resume();
+    audio.enabled = !audio.enabled;
+
+    ui.sound.textContent = audio.enabled ? "SOUND: ON" : "SOUND: OFF";
+    ui.sound.classList.toggle("active", audio.enabled);
+});
+
+renderer.domElement.style.touchAction = "none";
+
+const QUALITY_LEVELS = [
+    { name: "LOW", pixelRatio: 1, bloom: false, shadowSize: 0 },
+    { name: "MEDIUM", pixelRatio: 1.25, bloom: true, shadowSize: 1024 },
+    { name: "HIGH", pixelRatio: 1.5, bloom: true, shadowSize: 2048 }
+];
+
+let qualityIndex = 2;
+let autoQuality = true;
+let fpsClock = 0;
+let fpsFrames = 0;
+let fpsWarmup = 0;
+
+function applyQuality(index) {
+    const level = QUALITY_LEVELS[index];
+    qualityIndex = index;
+
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, level.pixelRatio));
+    bloomPass.enabled = level.bloom;
+    keyLight.castShadow = level.shadowSize > 0;
+    shadowCatcher.visible = level.shadowSize > 0;
+
+    if (level.shadowSize > 0 && keyLight.shadow.mapSize.x !== level.shadowSize) {
+        keyLight.shadow.mapSize.set(level.shadowSize, level.shadowSize);
+        keyLight.shadow.map?.dispose();
+        keyLight.shadow.map = null;
+    }
+
+    resizeRenderer();
+
+    if (ui.quality) ui.quality.textContent = `QUALITY: ${level.name}`;
+}
+
+function monitorFrameRate(dt) {
+    if (!autoQuality) return;
+
+    fpsWarmup += dt;
+    if (fpsWarmup < 5) return;
+
+    fpsClock += dt;
+    fpsFrames++;
+
+    if (fpsClock < 2) return;
+
+    const fps = fpsFrames / fpsClock;
+    fpsClock = 0;
+    fpsFrames = 0;
+
+    if (fps < 30 && qualityIndex > 0) applyQuality(qualityIndex - 1);
+}
+
+ui.quality?.addEventListener("click", () => {
+    autoQuality = false;
+    applyQuality((qualityIndex + 1) % QUALITY_LEVELS.length);
+});
 
 function animate(time) {
 
@@ -1865,6 +1983,9 @@ function animate(time) {
     cutPlane.constant = approach(cutPlane.constant, cutPlaneTarget, 4, dt);
 
     composer.render(dt);
+    updateLabels();
+    updateAudio();
+    monitorFrameRate(dt);
 }
 
 let isLooping = false;
@@ -1879,6 +2000,10 @@ function startLoop() {
 function stopLoop() {
     isLooping = false;
     renderer.setAnimationLoop(null);
+
+    if (audio.master) {
+        audio.master.gain.setTargetAtTime(0, audio.context.currentTime, 0.05);
+    }
 }
 
 function resizeRenderer() {
@@ -1904,6 +2029,6 @@ new IntersectionObserver((entries) => {
     }
 }).observe(container);
 
-resizeRenderer();
+applyQuality(window.matchMedia("(pointer: coarse)").matches ? 1 : 2);
 flyTo(cameraStart, targetStart, 2.6);
 startLoop();
