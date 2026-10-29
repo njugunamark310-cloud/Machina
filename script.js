@@ -65,7 +65,11 @@ const ui = {
     rpmSlider: $("#rpm-slider"),
     boostSlider: $("#boost-slider"),
     auto: $("#toggle-auto"),
+
+    
 };
+
+
 
 
 
@@ -883,6 +887,33 @@ for (let i = 0; i < CYLINDER_COUNT; i++) {
     cylinderMaterials.push(material);
 }
 
+const flashTexture = makeRadialTexture([
+    [0, "rgba(255, 220, 150, 1)"],
+    [0.4, "rgba(255, 120, 20, 0.6)"],
+    [1, "rgba(255, 80, 0, 0)"]
+]);
+
+const combustionFlashes = cylinderParts.map((cylinder) => {
+    const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+            map: flashTexture,
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            toneMapped: false
+        })
+    );
+    sprite.position.set(0, 0.15, 0.3);
+    cylinder.add(sprite);
+
+    const light = new THREE.PointLight(COLORS.orange, 0, 1.6);
+    light.position.set(0, 0.2, 0.45);
+    cylinder.add(light);
+
+    return { sprite, light };
+});
+
 const crankshaftGroup = new THREE.Group();
 const crankshaftMaterial = makeMetal(0x8c9ba8, { roughness: 0.3 });
 
@@ -1322,6 +1353,11 @@ function updateEngineVisuals(time, dt) {
         const burn = phase < 0.25 ? 1 - phase / 0.25 : 0;
         const glow = burn * burn * idleFade;
 
+        const flash = combustionFlashes[i];
+        flash.light.intensity = glow * 8;
+        flash.sprite.material.opacity = glow;
+        flash.sprite.scale.setScalar(0.12 + glow * 0.45);
+
         cylinderMaterials[i].emissiveIntensity = glow * 3.5;
         totalBurn += glow;
 
@@ -1411,6 +1447,8 @@ function updateEngineVisuals(time, dt) {
 
     const outlinePulse = 0.75 + Math.sin(time * 0.006) * 0.25;
     selectionOutline.material.opacity = outlinePulse;
+
+    
 }
 
 function updateExplodedView(dt) {
@@ -1629,6 +1667,56 @@ ui.engine?.addEventListener("click", () => {
 });
 
 syncEngineButton();
+
+const labelAnchors = [
+    ["Cylinder Head", cylinderHead],
+    ["Cylinder", cylinderParts[0]],
+    ["Intake", intakePlenum],
+    ["Exhaust", exhaustCollector],
+    ["Turbo", turbineHousing],
+    ["Oil Filter", oilFilterBody],
+    ["Oil Pan", oilPan],
+    ["Crank Pulley", pulleyDisc]
+].map(([text, object]) => {
+    const element = document.createElement("div");
+    element.className = "engine-label";
+    element.textContent = text;
+    element.style.display = "none";
+    container.appendChild(element);
+    return { object, element };
+});
+
+let labelsEnabled = false;
+const labelPosition = new THREE.Vector3();
+
+function updateLabels() {
+    if (!labelsEnabled) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    labelAnchors.forEach(({ object, element }) => {
+        object.getWorldPosition(labelPosition);
+        labelPosition.project(camera);
+
+        element.style.display = labelPosition.z < 1 ? "block" : "none";
+        element.style.transform =
+            `translate(${(labelPosition.x * 0.5 + 0.5) * width}px, ${(-labelPosition.y * 0.5 + 0.5) * height}px) translate(-50%, -130%)`;
+    });
+}
+
+ui.labels?.addEventListener("click", () => {
+    labelsEnabled = !labelsEnabled;
+
+    if (!labelsEnabled) {
+        labelAnchors.forEach(({ element }) => {
+            element.style.display = "none";
+        });
+    }
+
+    ui.labels.textContent = labelsEnabled ? "LABELS: ON" : "LABELS: OFF";
+    ui.labels.classList.toggle("active", labelsEnabled);
+});
 
 
 

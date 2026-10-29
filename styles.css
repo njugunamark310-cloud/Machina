@@ -465,3 +465,6 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
 #stroke-panel b[data-stroke="POWER"]{color:#ff8a00}
 #stroke-panel b[data-stroke="INTAKE"]{color:#48e5ff}
 #stroke-panel b[data-stroke="COMPRESSION"]{color:#ffd24a}
+
+#engine-canvas{position:relative}
+.engine-label{position:absolute;left:0;top:0;pointer-events:none;font:11px monospace;color:#00e5ff;background:rgba(5,8,15,.7);border:1px solid #00e5ff;padding:2px 6px;white-space:nowrap}
