@@ -459,3 +459,9 @@ main { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; gap: 1.5
         grid-template-columns: 1fr;
     }
 }
+
+#stroke-panel{font:12px monospace;color:#00e5ff;display:grid;gap:4px}
+#stroke-panel b{display:inline-block;min-width:110px;color:#9aabbc}
+#stroke-panel b[data-stroke="POWER"]{color:#ff8a00}
+#stroke-panel b[data-stroke="INTAKE"]{color:#48e5ff}
+#stroke-panel b[data-stroke="COMPRESSION"]{color:#ffd24a}
