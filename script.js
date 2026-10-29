@@ -61,8 +61,13 @@ const ui = {
     partName: $("#part-name"),
     partDescription: $("#part-description"),
     partMaterial: $("#part-material"),
-    partFunction: $("#part-function")
+    partFunction: $("#part-function"),
+    rpmSlider: $("#rpm-slider"),
+    boostSlider: $("#boost-slider"),
+    auto: $("#toggle-auto"),
 };
+
+
 
 const STROKES = ["POWER", "EXHAUST", "INTAKE", "COMPRESSION"];
 const strokeLabels = [0, 1, 2, 3].map((i) => $(`#stroke-${i}`));
@@ -1436,7 +1441,9 @@ function renderTelemetry(dt) {
         label.dataset.stroke = name;
         label.textContent = name;
     }
+    
 });
+
 }
 
 const raycaster = new THREE.Raycaster();

@@ -60,6 +60,8 @@
         </svg>
         </div>
 
+        
+
     </section>
 
     <section class="stats">
@@ -186,6 +188,11 @@
         <div>CYL 3 <b id="stroke-2">-</b></div>
         <div>CYL 4 <b id="stroke-3">-</b></div>
    </div>
+
+   <label>RPM <input type="range" id="rpm-slider" min="800" max="7000" step="50" value="3200"></label>
+   <label>BOOST <input type="range" id="boost-slider" min="0" max="2" step="0.1" value="0.8"></label>
+   <button id="toggle-auto">MODE: AUTO</button>
+   
 
     <p class="telemetry-note">Illustrative simulation only — not live engine measurements.</p>
 </div>
