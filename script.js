@@ -1244,6 +1244,9 @@ for (const part of movableParts) {
 
 const sim = {
     running: true,
+    manual: false,
+    manualRpm: 3200,
+    manualBoost: 0.8,
     rpm: 0,
     temp: 40,
     boost: 0,
@@ -1269,14 +1272,13 @@ function camLift(crankDeg, openCrank) {
 }
 
 function updateSimulation(time, dt) {
-    const targetRpm = sim.running
-        ? Math.max(800,
-            3200 + Math.sin(time * 0.0012) * 2200 + Math.sin(time * 0.0031) * 500)
-        : 0;
-    const targetTemp = sim.running ? 88 + Math.sin(time * 0.00045) * 5 : 35;
-    const targetBoost = sim.running
-        ? Math.max(0.1, 0.8 + Math.sin(time * 0.0015) * 0.65)
-        : 0;
+    const autoRpm = Math.max(800,
+        3200 + Math.sin(time * 0.0012) * 2200 + Math.sin(time * 0.0031) * 500);
+    const autoBoost = Math.max(0.1, 0.8 + Math.sin(time * 0.0015) * 0.65);
+
+    const targetRpm = !sim.running ? 0 : sim.manual ? sim.manualRpm : autoRpm;
+    const targetBoost = !sim.running ? 0 : sim.manual ? sim.manualBoost : autoBoost;
+    const targetTemp = sim.running ? 88 + (sim.rpm / MAX_RPM) * 12 + Math.sin(time * 0.00045) * 3 : 35;
 
     sim.rpm = approach(sim.rpm, targetRpm, 3, dt);
     sim.temp = approach(sim.temp, targetTemp, 0.15, dt);
@@ -1284,6 +1286,31 @@ function updateSimulation(time, dt) {
 
     sim.crankDeg = (sim.crankDeg + (sim.rpm * 6 / SLOW_MOTION) * dt) % 720;
 }
+
+function syncAutoButton() {
+    if (!ui.auto) return;
+    ui.auto.textContent = sim.manual ? "MODE: MANUAL" : "MODE: AUTO";
+    ui.auto.classList.toggle("active", sim.manual);
+}
+
+ui.rpmSlider?.addEventListener("input", () => {
+    sim.manual = true;
+    sim.manualRpm = Number(ui.rpmSlider.value);
+    syncAutoButton();
+});
+
+ui.boostSlider?.addEventListener("input", () => {
+    sim.manual = true;
+    sim.manualBoost = Number(ui.boostSlider.value);
+    syncAutoButton();
+});
+
+ui.auto?.addEventListener("click", () => {
+    sim.manual = !sim.manual;
+    syncAutoButton();
+});
+
+syncAutoButton();
 
 function updateEngineVisuals(time, dt) {
     const crank = sim.crankDeg;
@@ -1602,6 +1629,8 @@ ui.engine?.addEventListener("click", () => {
 });
 
 syncEngineButton();
+
+
 
 function animate(time) {
 
