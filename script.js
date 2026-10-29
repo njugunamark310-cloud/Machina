@@ -275,7 +275,13 @@ const componentInfo = {
         description: "Sits on the end of the crankshaft. The orange mark lets you see the crank turning, slowed down so your eyes can follow it.",
         material: "Steel simulation",
         function: "In a real engine it drives belts for parts like the alternator and water pump."
-    }
+    },
+
+        "Accessory Pulley": {
+        description: "Small pulleys driven by the belt. They spin faster than the crank because they are smaller.",
+        material: "Steel simulation",
+        function: "Power the alternator and the water pump."
+    },
 };
 
 function makeGrainTexture() {
@@ -1070,6 +1076,88 @@ const timingMark = new THREE.Mesh(
 timingMark.position.set(0, 0.34, 0);
 pulleySpinner.add(timingMark);
 
+const accessoryPulleys = [
+    { y: 0.55, z: 0.6, radius: 0.2 },
+    { y: 0.62, z: -0.55, radius: 0.17 }
+].map((definition) => {
+    const group = new THREE.Group();
+    group.position.set(0, definition.y, definition.z);
+
+    group.add(
+        registerPart(
+            new THREE.Mesh(
+                new THREE.CylinderGeometry(definition.radius, definition.radius, 0.1, 32).rotateZ(Math.PI / 2),
+                headMaterial
+            ),
+            "Accessory Pulley"
+        )
+    );
+
+    const spinner = new THREE.Group();
+    spinner.position.x = 0.051;
+
+    const mark = new THREE.Mesh(
+        new THREE.BoxGeometry(0.02, definition.radius * 0.6, 0.03),
+        markMaterial
+    );
+    mark.position.y = definition.radius * 0.55;
+    spinner.add(mark);
+
+    group.add(spinner);
+    pulleyGroup.add(group);
+
+    return { ...definition, spinner };
+});
+
+function buildBeltPoints() {
+    const circles = [{ y: 0, z: 0, radius: 0.42 }, ...accessoryPulleys];
+    const samples = [];
+
+    circles.forEach((circle) => {
+        for (let i = 0; i < 48; i++) {
+            const angle = (i / 48) * Math.PI * 2;
+            samples.push([
+                circle.y + Math.cos(angle) * (circle.radius + 0.014),
+                circle.z + Math.sin(angle) * (circle.radius + 0.014)
+            ]);
+        }
+    });
+
+    samples.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+
+    const cross = (o, a, b) =>
+        (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+    const lower = [];
+    for (const point of samples) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+            lower.pop();
+        }
+        lower.push(point);
+    }
+
+    const upper = [];
+    for (let i = samples.length - 1; i >= 0; i--) {
+        const point = samples[i];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+            upper.pop();
+        }
+        upper.push(point);
+    }
+
+    lower.pop();
+    upper.pop();
+
+    return lower.concat(upper).map(([y, z]) => new THREE.Vector3(0, y, z));
+}
+
+const belt = new THREE.Mesh(
+    new THREE.TubeGeometry(new THREE.CatmullRomCurve3(buildBeltPoints(), true), 300, 0.016, 8, true),
+    new THREE.MeshStandardMaterial({ color: "#12161c", metalness: 0.1, roughness: 0.85 })
+);
+belt.scale.x = 3;
+pulleyGroup.add(belt);
+
 engineGroup.traverse((object) => {
     if (!object.isMesh || object.material.isMeshBasicMaterial) return;
     object.castShadow = true;
@@ -1565,7 +1653,12 @@ function showPartInfo(partName) {
     }
     if (ui.partMaterial) ui.partMaterial.textContent = info ? info.material : "—";
     if (ui.partFunction) ui.partFunction.textContent = info ? info.function : "—";
+    
+    
+    
 }
+
+
 
 function selectPart(mesh) {
     selectedPart = mesh;
