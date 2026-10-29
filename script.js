@@ -64,6 +64,9 @@ const ui = {
     partFunction: $("#part-function")
 };
 
+const STROKES = ["POWER", "EXHAUST", "INTAKE", "COMPRESSION"];
+const strokeLabels = [0, 1, 2, 3].map((i) => $(`#stroke-${i}`));
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(COLORS.background);
 
@@ -1425,6 +1428,15 @@ function renderTelemetry(dt) {
         ui.gaugePath.style.strokeDasharray = `${GAUGE_ARC}`;
         ui.gaugePath.style.strokeDashoffset = `${GAUGE_ARC * (1 - progress)}`;
     }
+
+    strokeLabels.forEach((label, i) => {
+    if (!label) return;
+    const name = STROKES[Math.floor(mod(sim.crankDeg - FIRING_OFFSETS[i], 720) / 180)];
+    if (label.dataset.stroke !== name) {
+        label.dataset.stroke = name;
+        label.textContent = name;
+    }
+});
 }
 
 const raycaster = new THREE.Raycaster();
