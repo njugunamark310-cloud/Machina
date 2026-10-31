@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MACHINA | Automotive Engineering</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="gearbox.css">
 <script type="importmap">
 {
     "imports": {
@@ -14,6 +15,7 @@
 }
 </script>
 <script type="module" src="script.js"></script>
+<script type="module" src="gearbox.js"></script>
 </head>
 <body>
    <header class="topbar">
@@ -97,10 +99,8 @@
           <a class="module-status" href="#gearbox-lab">READY FOR SIMULATION</a>
        </article>
 
-       </article>
-
       <article class="module-card panel" id="turbo-lab">
-        <p class="module-number">02 / FORCED INDUCTION</p>
+        <p class="module-number">03 / FORCED INDUCTION</p>
         <h3>Turbo Lab</h3>
         <p>Explore boost pressure, airflow and turbo lag.</p>
         <span class="module-status">READY FOR SIMULATION</span>
@@ -109,28 +109,28 @@
 
 
        <article class="module-card panel" id="telemetry">
-        <p class="module-number">03 / VEHICLE DATA</p>
+        <p class="module-number">04 / VEHICLE DATA</p>
         <h3>Live Telemetry</h3>
         <p>Monitor simulated RPM, speed and engine temperature.</p>
         <span class="module-status">SIMULATED DATA</span>
       </article>
 
        <article class="module-card panel" id="diagnostics">
-        <p class="module-number">04 / OBD-II</p>
+        <p class="module-number">05 / OBD-II</p>
         <h3>Diagnostic Lab</h3>
         <p>Learn fault codes and trace simulated fault scenarios.</p>
         <span class="module-status locked">COMING SOON</span>
       </article>
 
        <article class="module-card panel" id="powertrain">
-        <p class="module-number">05 / COMPARISON</p>
+        <p class="module-number">06 / COMPARISON</p>
         <h3>Powertrain Comparison</h3>
         <p>Petrol vs diesel: torque curves and power delivery.</p>
         <span class="module-status locked">COMING SOON</span>
       </article>
 
       <article class="module-card panel" id="mechanical">
-        <p class="module-number">06 / MECHANICAL</p>
+        <p class="module-number">07 / MECHANICAL</p>
         <h3>Mechanical Explorer</h3>
         <p>Transmissions, suspension, brakes and drivetrains.</p>
         <span class="module-status locked">COMING SOON</span>
@@ -228,23 +228,23 @@
     <div class="component-panel-header">
         <div>
             <p class="eyebrow">COMPONENT ANALYSIS / 01</p>
-            <h3 id="component-name">Select an engine component</h3>
+            <h3 id="part-name">Select an engine component</h3>
         </div>
         <span class="sim-tag" id="component-status">AWAITING SELECTION</span>
     </div>
 
-    <p class="component-description" id="component-description">
+    <p class="component-description" id="part-description">
         Click a component in the 3D engine to inspect its purpose and construction.
     </p>
 
     <div class="component-details">
         <div>
             <p class="stat-label">MATERIAL</p>
-            <p id="component-material">Not selected</p>
+            <p id="part-material">Not selected</p>
         </div>
         <div>
             <p class="stat-label">FUNCTION</p>
-            <p id="component-function">Not selected</p>
+            <p id="part-function">Not selected</p>
         </div>
     </div>
 
@@ -369,6 +369,10 @@
         <button type="submit" class="btn">SEND</button>
       </form>
     </section>
+  </main>
+
+  <footer class="footer">
+    <p>MACHINA is an educational project. All readings are <strong>simulated</strong>, not real vehicle measurements.</p>
   </footer>
 </body>
 </html>
