@@ -37,3 +37,13 @@ const BRAKE_N = 14000;
 const ENGINE_INERTIA = 0.28;                // kg m^2 (flywheel + converter pump)
 const CONVERTER_K = 30;                     // pump capacity factor
 const STALL_MULT = 1.9;                     // torque multiplication at stall
+
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const approach = (current, target, rate, dt) =>
+    current + (target - current) * (1 - Math.exp(-rate * dt));
+const smooth = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
+ 
+const gearEntry = (g) => GEARS.find((e) => e.gear === g);
+const gearRatio = (g) => (g === 0 ? 0 : gearEntry(g).ratio);
+const GEAR_LABEL = (g) => (g === -1 ? "R" : g === 0 ? "N" : String(g));
+const ordinal = (g) => (g === 1 ? "1st" : g === 2 ? "2nd" : g === 3 ? "3rd" : `${g}th`);
