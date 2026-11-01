@@ -47,3 +47,10 @@ const gearEntry = (g) => GEARS.find((e) => e.gear === g);
 const gearRatio = (g) => (g === 0 ? 0 : gearEntry(g).ratio);
 const GEAR_LABEL = (g) => (g === -1 ? "R" : g === 0 ? "N" : String(g));
 const ordinal = (g) => (g === 1 ? "1st" : g === 2 ? "2nd" : g === 3 ? "3rd" : `${g}th`);
+
+// Engine Turbo
+
+const TORQUE_POINTS = [
+    [0, 80], [800, 120], [1500, 190], [2500, 250],
+    [4500, 270], [6000, 240], [7000, 180], [9000, 100]
+];
