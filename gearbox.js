@@ -54,3 +54,14 @@ const TORQUE_POINTS = [
     [0, 80], [800, 120], [1500, 190], [2500, 250],
     [4500, 270], [6000, 240], [7000, 180], [9000, 100]
 ];
+
+function torqueCurve(rpm) {
+    for (let i = 1; i < TORQUE_POINTS.length; i++) {
+        const [r1, t1] = TORQUE_POINTS[i];
+        if (rpm <= r1) {
+            const [r0, t0] = TORQUE_POINTS[i - 1];
+            return t0 + ((rpm - r0) / (r1 - r0)) * (t1 - t0);
+        }
+    }
+    return TORQUE_POINTS[TORQUE_POINTS.length - 1][1];
+}
