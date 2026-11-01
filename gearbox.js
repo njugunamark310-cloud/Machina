@@ -25,3 +25,15 @@ const GEARS = [
 ];
 const ELEMENTS = ["A", "B", "C", "D", "E"];
 const TOP_GEAR = 8;
+
+const FINAL_DRIVE = 3.15;
+const WHEEL_RADIUS = 0.33;
+const IDLE_RPM = 800;
+const REDLINE = 7000;
+const MASS = 1600;
+const ROLLING_N = 171;
+const DRAG_K = 0.409;
+const BRAKE_N = 14000;
+const ENGINE_INERTIA = 0.28;                // kg m^2 (flywheel + converter pump)
+const CONVERTER_K = 30;                     // pump capacity factor
+const STALL_MULT = 1.9;                     // torque multiplication at stall
