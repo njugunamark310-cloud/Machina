@@ -636,3 +636,47 @@ function externalGear(teeth, boreRadius, lightening) {
      const converter = new THREE.Group();
     converter.position.set(-2.1, 0, 0);
     root.add(converter);
+
+    // translucent cover shell (lathe profile of a flattened doughnut)
+     const shellPts = [];
+    for (let i = 0; i <= 40; i++) {
+        const t = (i / 40) * TWO_PI;            // full ellipse in the (radius, axial) plane
+        shellPts.push(new THREE.Vector2(0.43 + Math.cos(t) * 0.27, Math.sin(t) * 0.23));
+    }
+    const shell = new THREE.Mesh(
+        new THREE.LatheGeometry(shellPts, 96).rotateZ(Math.PI / 2),
+        new THREE.MeshPhysicalMaterial({
+            color: "#4a5f77", metalness: 0.7, roughness: 0.25, transparent: true, opacity: 0.22,
+            side: THREE.DoubleSide, depthWrite: false
+        })
+    );
+    addPick(shell, "converter");
+    converter.add(shell);
+ 
+    const impeller = new THREE.Group();   // spins with the engine
+    const turbineGroup = new THREE.Group(); // spins with the input shaft
+    const stator = new THREE.Group();     // locked by the one-way clutch
+    converter.add(impeller, turbineGroup, stator);
+ 
+    const bladeMat = {
+        impeller: metal("#e87532", { roughness: 0.3 }),
+        turbine: metal("#48c9d8", { roughness: 0.3 }),
+        stator: metal("#c4ccd3", { roughness: 0.25 })
+    };
+    const bladeGeo = new THREE.BoxGeometry(0.2, 0.2, 0.012);
+    const placeBlades = (group, material, x, tilt, count, key) => {
+        for (let i = 0; i < count; i++) {
+            const a = (i / count) * TWO_PI;
+            const blade = new THREE.Mesh(bladeGeo, material);
+            blade.position.set(x, Math.cos(a) * 0.43, Math.sin(a) * 0.43);
+            blade.rotation.set(a + Math.PI / 2, tilt, 0, "XYZ");
+            blade.castShadow = true;
+            addPick(blade, key);
+            group.add(blade);
+        }
+    };
+    placeBlades(impeller, bladeMat.impeller, -0.12, 0.45, 30, "impeller");
+    placeBlades(turbineGroup, bladeMat.turbine, 0.12, -0.45, 30, "turbine");
+    placeBlades(stator, bladeMat.stator, 0, 0.0, 16, "stator-blades");
+
+    
