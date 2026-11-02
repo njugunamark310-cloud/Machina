@@ -52,3 +52,17 @@
       }
     };
   }
+
+   // Control the chat while AXIOM is responding
+  function setBusy(state) {
+    busy = state;
+
+    input.disabled = state;
+
+    const sendButton = form.querySelector('button[type="submit"]');
+
+    if (sendButton) {
+      sendButton.disabled = state;
+      sendButton.textContent = state ? 'THINKING...' : 'SEND';
+    }
+  }
