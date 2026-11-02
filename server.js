@@ -94,3 +94,27 @@ function cleanMessages(messages) {
 
   return cleaned;
 }
+
+// Safely format simulator information
+function simBlock(sim) {
+  if (!sim || typeof sim !== 'object') {
+    return 'Simulator data unavailable.';
+  }
+
+  const engine = sim.engine || {};
+  const gearbox = sim.gearbox || {};
+
+  return `
+CURRENT MACHINA SIMULATOR READINGS
+
+ENGINE
+RPM: ${String(engine.rpm ?? 'Unavailable').slice(0, 30)}
+Temperature: ${String(engine.temperature ?? 'Unavailable').slice(0, 30)}
+Boost: ${String(engine.boost ?? 'Unavailable').slice(0, 30)}
+
+GEARBOX
+Gear: ${String(gearbox.gear ?? 'Unavailable').slice(0, 30)}
+RPM: ${String(gearbox.rpm ?? 'Unavailable').slice(0, 30)}
+Speed: ${String(gearbox.speed ?? 'Unavailable').slice(0, 30)}
+`;
+}
