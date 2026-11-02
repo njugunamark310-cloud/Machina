@@ -118,3 +118,26 @@ RPM: ${String(gearbox.rpm ?? 'Unavailable').slice(0, 30)}
 Speed: ${String(gearbox.speed ?? 'Unavailable').slice(0, 30)}
 `;
 }
+
+// Track API requests by client IP
+const requestCounts = new Map();
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const maxRequests = 20;
+
+  let record = requestCounts.get(ip);
+
+  if (!record || now - record.start > windowMs) {
+    record = {
+      start: now,
+      count: 0
+    };
+  }
+
+  record.count++;
+  requestCounts.set(ip, record);
+
+  return record.count <= maxRequests;
+}
