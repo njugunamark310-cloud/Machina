@@ -1153,3 +1153,63 @@ function externalGear(teeth, boreRadius, lightening) {
         orangeLight.intensity = 10 + torqueFraction * 14;
         bloomPass.strength = 0.45 + torqueFraction * 0.25;
     }
+
+        // Telemetry
+    let telemetryClock = 0;
+    let lastSeq = 0;
+    let toast = "";
+    let toastTimer = 0;
+    const setStat = (selector, value) => {
+        const node = $(selector)?.firstChild;
+        if (node && node.nodeType === Node.TEXT_NODE) node.nodeValue = `${value} `;
+    };
+    const text = (el, value) => { if (el && el.textContent !== String(value)) el.textContent = value; };
+ 
+    function renderTelemetry(dt) {
+        if (sim.shiftSeq !== lastSeq) {
+            lastSeq = sim.shiftSeq;
+            const from = GEAR_LABEL(sim.fromGear);
+            const to = GEAR_LABEL(sim.targetGear);
+            toast = `${sim.shiftKind === "UP" ? "UPSHIFT" : "DOWNSHIFT"} ${from} → ${to} · ${Math.round(sim.shiftTime * 1000)} ms`;
+            toastTimer = 1.6;
+        }
+        toastTimer -= dt;
+ 
+        telemetryClock += dt;
+        if (telemetryClock < 0.08) return;
+        telemetryClock = 0;
+ 
+        const shownGear = sim.shifting ? sim.targetGear : sim.gear;
+        text(ui.gear, sim.selector === "P" || sim.selector === "N" ? sim.selector : GEAR_LABEL(shownGear));
+        text(ui.rpm, Math.round(sim.rpm));
+        text(ui.speed, Math.abs(Math.round(sim.speedKmh)));
+        text(ui.ratio, shownGear === 0 ? "—" : (sim.ratioNow * FINAL_DRIVE).toFixed(2));
+        text(ui.input, Math.round(sim.inputRpm));
+        text(ui.output, Math.round(Math.abs(sim.outputRpm)));
+        text(ui.torque, Math.round(sim.wheelTorque));
+ 
+        if (ui.couplingBar) ui.couplingBar.style.width = `${Math.max(sim.lockup, sim.torqueMult > 1 ? 0.08 : 0) * 100}%`;
+        if (ui.rpmBar) {
+            ui.rpmBar.style.width = `${Math.min(sim.rpm / 8000, 1) * 100}%`;
+            ui.rpmBar.classList.toggle("over", sim.rpm >= REDLINE - 200);
+        }
+ 
+        const direction = sim.speed < -0.3 ? "REVERSING" : "";
+        const overRev = sim.overRev ? "OVER-REV: SHIFT UP" : "";
+        const engineOff = linked && !sim.running ? "ENGINE OFF: START IT IN THE ENGINE LAB" : "";
+        text(ui.message, sim.message || overRev || engineOff || direction);
+        ui.message?.classList.toggle("warn", !!(sim.message || overRev || engineOff));
+ 
+        if (linked) {
+            setStat("#stat-speed", Math.abs(Math.round(sim.speedKmh)));
+            setStat("#stat-throttle", Math.round(sim.throttle * 100));
+            if (Number.isFinite(bus.engine.temp)) setStat("#stat-temp", Math.round(bus.engine.temp));
+        }
+ 
+        for (const [id, b] of Object.entries(selectorButtons)) {
+            b.classList.toggle("active", id === sim.selector);
+        }
+        const lock = sim.lockup > 0.5 ? "LOCKED" : sim.torqueMult > 1.05 ? `MULT ${sim.torqueMult.toFixed(1)}x` : "SLIPPING";
+        const info = `${sim.selector}${sim.selector === "M" ? ` · HOLD ${sim.manualGear}` : ""}  ·  CONVERTER ${lock}  ·  SLIP ${Math.round(Math.abs(sim.slip))} RPM`;
+        text(statusLine, toastTimer > 0 ? `${toast}   |   ${info}` : info);
+    }
