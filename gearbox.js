@@ -875,4 +875,36 @@ function externalGear(teeth, boreRadius, lightening) {
         if (ui.partFunction) ui.partFunction.textContent = info ? info[3] : "—";
     }
     showInfo(null);
+
+    // picking
+     const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let downAt = null;
  
+    const pointerTo = (event) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+    };
+    const pick = () => {
+        raycaster.setFromCamera(pointer, camera);
+        const hit = raycaster.intersectObjects(pickables, false)[0];
+        return hit ? hit.object : null;
+    };
+ 
+    renderer.domElement.addEventListener("pointerdown", (e) => { downAt = { x: e.clientX, y: e.clientY }; });
+    renderer.domElement.addEventListener("pointerup", (e) => {
+        if (!downAt) return;
+        const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
+        downAt = null;
+        if (moved > 5) return;
+        pointerTo(e);
+        const hit = pick();
+        if (selected?.material?.emissive) { selected.material.emissive.set("#000000"); selected.material.emissiveIntensity = 0; }
+        selected = hit && hit !== selected ? hit : null;
+        showInfo(selected ? selected.userData.partKey : null);
+    });
+    renderer.domElement.addEventListener("pointermove", (e) => {
+        if (e.buttons) return;
+        pointerTo(e);
+        renderer.domElement.style.cursor = pick() ? "pointer" : "grab";
+    });
