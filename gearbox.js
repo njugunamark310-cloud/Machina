@@ -908,3 +908,53 @@ function externalGear(teeth, boreRadius, lightening) {
         pointerTo(e);
         renderer.domElement.style.cursor = pick() ? "pointer" : "grab";
     });
+
+    // simulation + controls
+     const sim = createDrivetrain();
+    const auto = createAuto();
+    let sport = false;
+ 
+    // Shared bus: the engine page publishes bus.engine; link.engine decides whether the
+    // engine follows this gearbox (rpm, boost) and the gearbox follows the engine ON/OFF.
+    const bus = (window.machina = window.machina || {});
+    bus.drivetrain = sim;
+    bus.requestSelector = (id) => requestSelector(sim, id);
+    bus.link = bus.link || { engine: false };
+ 
+    let linked = false;
+    let linkApplied = false;
+    const linkButton = $("#gb-link");
+ 
+    const refreshLink = () => {
+        if (!linkButton) return;
+        const hasEngine = !!bus.engine;
+        linkButton.disabled = !hasEngine;
+        linkButton.textContent = hasEngine
+            ? `ENGINE LINK: ${bus.link.engine ? "ON" : "OFF"}`
+            : "ENGINE LINK: NO ENGINE ON PAGE";
+        linkButton.classList.toggle("active", hasEngine && bus.link.engine);
+    };
+    linkButton?.addEventListener("click", () => {
+        bus.link.engine = !bus.link.engine;
+        refreshLink();
+        window.dispatchEvent(new CustomEvent("machina-link-change"));
+    });
+    window.addEventListener("machina-link-change", refreshLink);
+    refreshLink();
+ 
+    const sliders = { throttle: 0, brake: 0 };
+    const keys = new Set();
+    const keyed = { throttle: 0, brake: 0 };
+    let keysEnabled = false;
+ 
+    for (const name of ["throttle", "brake"]) {
+        ui[name]?.addEventListener("input", () => { sliders[name] = Number(ui[name].value); });
+    }
+ 
+    // The clutch pedal does not exist on an automatic: hide the old slider.
+    if (ui.clutch) {
+        const wrap = ui.clutch.closest("label") || ui.clutch.closest(".gb-control, .control, .slider-row");
+        (wrap || ui.clutch).style.display = "none";
+    }
+    // old manual gear buttons are replaced by the selector panel below
+    ui.gearButtons.forEach((b) => { b.style.display = "none
