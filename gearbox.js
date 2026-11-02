@@ -957,4 +957,67 @@ function externalGear(teeth, boreRadius, lightening) {
         (wrap || ui.clutch).style.display = "none";
     }
     // old manual gear buttons are replaced by the selector panel below
-    ui.gearButtons.forEach((b) => { b.style.display = "none
+    ui.gearButtons.forEach((b) => { b.style.display = "none"; });
+
+    // selector panel (P R N D S M + paddles)
+    const selectorPanel = document.createElement("div");
+    selectorPanel.id = "gb-selector";
+    selectorPanel.setAttribute("role", "group");
+    selectorPanel.setAttribute("aria-label", "Gear selector");
+    selectorPanel.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;width:100%";
+    const buttonClass = ui.gearButtons[0]?.className || "";
+    const selectorButtons = {};
+ 
+    const SELECTORS = [["P", "P"], ["R", "R"], ["N", "N"], ["D", "D"], ["S", "SPORT"], ["M", "MANUAL"]];
+    for (const [id, label] of SELECTORS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = buttonClass;
+        b.textContent = label;
+        b.dataset.selector = id;
+        b.style.minWidth = id.length === 1 && label.length === 1 ? "44px" : "auto";
+        b.addEventListener("click", () => requestSelector(sim, id));
+        selectorPanel.appendChild(b);
+        selectorButtons[id] = b;
+    }
+    const paddle = (label, delta, title) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = buttonClass;
+        b.textContent = label;
+        b.title = title;
+        b.addEventListener("click", () => paddleShift(sim, delta));
+        selectorPanel.appendChild(b);
+        return b;
+    };
+    paddle("− DOWN", -1, "Downshift (Q)");
+    paddle("UP +", 1, "Upshift (E)");
+    const statusLine = document.createElement("div");
+    statusLine.style.cssText = "flex-basis:100%;font:600 12px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.06em;color:#7fdcff;min-height:1.4em";
+    selectorPanel.appendChild(statusLine);
+ 
+    const anchor = ui.gearButtons[0]?.parentElement;
+    if (anchor) anchor.parentElement.insertBefore(selectorPanel, anchor);
+    else if (ui.section) ui.section.appendChild(selectorPanel);
+ 
+    document.addEventListener("pointerdown", (event) => {
+        keysEnabled = !!ui.section && ui.section.contains(event.target);
+    });
+ 
+    document.addEventListener("keydown", (event) => {
+        if (!keysEnabled || (event.repeat && event.code !== "Space")) return;
+        if (event.target.closest?.("input[type=text], textarea")) return;
+        const selectorKeys = { KeyP: "P", KeyR: "R", KeyN: "N", KeyD: "D", KeyG: "S", KeyM: "M" };
+        if (event.code === "KeyW" || event.code === "KeyS") { keys.add(event.code); event.preventDefault(); }
+        else if (selectorKeys[event.code]) { requestSelector(sim, selectorKeys[event.code]); event.preventDefault(); }
+        else if (event.code === "KeyE") { paddleShift(sim, 1); event.preventDefault(); }
+        else if (event.code === "KeyQ") { paddleShift(sim, -1); event.preventDefault(); }
+    });
+    document.addEventListener("keyup", (event) => keys.delete(event.code));
+    window.addEventListener("blur", () => keys.clear());
+ 
+    const setToggle = (button, on, label) => {
+        if (!button) return;
+        button.textContent = `${label}: ${on ? "ON" : "OFF"}`;
+        button.classList.toggle("active", on);
+    };
