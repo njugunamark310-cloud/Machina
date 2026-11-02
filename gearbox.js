@@ -403,4 +403,91 @@ function init(container) {
         section: $("#gearbox-lab")
     };
 
+// Renderer / scene (MSAA + bloom for crisp edges and glow)
+const scene = new THREE.Scene();
+    scene.background = new THREE.Color(COLORS.background);
+    scene.fog = new THREE.Fog(COLORS.background, 11, 28);
+ 
+    const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+    const cameraStart = new THREE.Vector3(2.9, 1.9, 5.4);
+    const targetStart = new THREE.Vector3(-0.15, 0.0, 0);
+    camera.position.copy(cameraStart);
+ 
+    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.setAttribute("role", "img");
+    renderer.domElement.setAttribute("aria-label", "Interactive 3D simulation of an eight-speed automatic transmission");
+    renderer.domElement.style.touchAction = "none";
+    container.querySelector(".engine-loading, .gb-loading")?.remove();
+    container.appendChild(renderer.domElement);
+ 
+    const composerTarget = new THREE.WebGLRenderTarget(
+        Math.max(1, container.clientWidth), Math.max(1, container.clientHeight),
+        { type: THREE.HalfFloatType, samples: 4 }
+    );
+    const composer = new EffectComposer(renderer, composerTarget);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight)), 0.5, 0.6, 0.85
+    );
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+ 
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const studio = new RoomEnvironment();
+    scene.environment = pmrem.fromScene(studio, 0.04).texture;
+    scene.environmentIntensity = 0.75;
+    studio.dispose?.();
+    pmrem.dispose();
+ 
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enablePan = false;
+    controls.minDistance = 2.5;
+    controls.maxDistance = 12;
+    controls.maxPolarAngle = Math.PI * 0.52;
+    controls.target.copy(targetStart);
+ 
+    scene.add(new THREE.HemisphereLight("#7fdcff", "#1a0f05", 0.5));
+    const key = new THREE.DirectionalLight("#ffffff", 2.4);
+    key.position.set(3, 5, 5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    Object.assign(key.shadow.camera, { left: -5, right: 5, top: 4, bottom: -4, near: 0.5, far: 18 });
+    key.shadow.bias = -0.0003;
+    key.shadow.normalBias = 0.02;
+    scene.add(key);
+    const rim = new THREE.DirectionalLight("#7fdcff", 1.2);
+    rim.position.set(-4, 2, -4);
+    scene.add(rim);
+    const cyanLight = new THREE.PointLight(COLORS.cyan, 18, 10);
+    cyanLight.position.set(-4, 1, 2);
+    scene.add(cyanLight);
+    const orangeLight = new THREE.PointLight(COLORS.orange, 12, 10);
+    orangeLight.position.set(3, -1, -2);
+    scene.add(orangeLight);
+ 
+    const floor = new THREE.Group();
+    floor.position.y = FLOOR_Y;
+    const grid = new THREE.GridHelper(24, 48, COLORS.cyan, "#12384f");
+    grid.material.transparent = true;
+    grid.material.opacity = 0.35;
+    grid.material.toneMapped = false;
+    floor.add(grid);
+    const shadowCatcher = new THREE.Mesh(
+        new THREE.PlaneGeometry(16, 16).rotateX(-Math.PI / 2),
+        new THREE.ShadowMaterial({ color: 0x000814, opacity: 0.55 })
+    );
+    shadowCatcher.position.y = 0.002;
+    shadowCatcher.receiveShadow = true;
+    floor.add(shadowCatcher);
+    scene.add(floor);
+
 
