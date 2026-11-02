@@ -270,5 +270,37 @@ function stepDrivetrain(s, dt, ctrl) {
     }
     updateElements(s, dt);
 
+     const e = smooth(s.shift);
+    const ratioFrom = gearRatio(s.fromGear);
+    const ratioTo = gearRatio(s.targetGear);
+    const ratio = s.shifting ? ratioFrom + (ratioTo - ratioFrom) * e : gearRatio(s.gear);
+    const dirGear = s.shifting ? s.targetGear : s.gear;
+    const dir = dirGear < 0 ? -1 : 1;
+    s.ratioNow = ratio;
+ 
+    const overall = ratio * FINAL_DRIVE;
+    const engaged = ratio > 0 && s.selector !== "P" && s.selector !== "N";
+ 
+    // Torque converter lock-up: closes in higher gears at steady cruise, opens
+    // under hard acceleration in low gear, and while shifting.
+    const wantLock = engaged && s.gear >= 3 && !s.shifting && (s.throttle < 0.85 || s.gear >= 5) && s.speed > 6 && s.rpm > 1400;
+    s.lockup = approach(s.lockup, wantLock ? 1 : 0, wantLock ? 5 : 14, dt);
+ 
+    // Shift torque cut: a brief ignition retard mid-shift gives the sharp feel
+    const torqueCut = s.shifting && s.shiftKind === "UP" ? 1 - 0.55 * Math.sin(Math.PI * e) : 1;
+ 
+    const steps = 8;
+    const h = dt / steps;
+    let turbineTorque = 0;
+    let slipRpm = 0;
+ 
+    for (let i = 0; i < steps; i++) {
+        const rpm = (s.omega * 60) / TWO_PI;
+        const wheelRpm = (s.speed / (TWO_PI * WHEEL_RADIUS)) * 60;
+        const turbine = engaged ? Math.abs(wheelRpm) * overall : 0;
+        const sr = rpm > 50 ? clamp(turbine / rpm, 0, 1.2) : 0;
+        const slipFrac = 1 - sr;
+        
+
 
  
