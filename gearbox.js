@@ -73,3 +73,15 @@ const PLANETARY_SETS = [
     { name: "Set 2", sun: 32, planet: 14, planets: 4, x: 0.14 },
     { name: "Set 3", sun: 36, planet: 12, planets: 4, x: 0.82 }
 ].map((s) => ({ ...s, ring: s.sun + 2 * s.planet, orbit: (s.sun + s.planet) * MODULE }));
+
+// Sun speed multiple of the turbine for each set. The carriers all ride on the
+// output, so a lower gear (bigger ratio) makes suns spin much faster than carriers.
+const SUN_SPEED = [1.0, 0.62, 0.38];
+ 
+const wrapCentered = (x, period) =>
+    ((((x + period / 2) % period) + period) % period) - period / 2;
+ 
+// External mesh: angle of gear B meshing gear A. phi is the direction from A to B.
+function meshPartner(thetaA, teethA, teethB, phi) {
+    return -(teethA / teethB) * (thetaA - phi) + phi + Math.PI - Math.PI / teethB;
+}
