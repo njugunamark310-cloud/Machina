@@ -72,3 +72,28 @@
     console.error('AXIOM: Chat interface elements not found.');
     return;
   }
+
+    // Handle user messages
+  form.addEventListener('submit', function (event) {
+    event.preventDefault();
+
+    if (busy) return;
+
+    const question = input.value.trim();
+
+    if (!question) return;
+
+    if (question.length > MAX_INPUT) {
+      addMessage('Your question is too long. Please keep it under 1000 characters.', 'ai');
+      return;
+    }
+
+    addMessage(question, 'user');
+
+    history.push({
+      role: 'user',
+      content: question
+    });
+
+    input.value = '';
+  });
