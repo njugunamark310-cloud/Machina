@@ -679,4 +679,20 @@ function externalGear(teeth, boreRadius, lightening) {
     placeBlades(turbineGroup, bladeMat.turbine, 0.12, -0.45, 30, "turbine");
     placeBlades(stator, bladeMat.stator, 0, 0.0, 16, "stator-blades");
 
+    //lock-up clutch piston slides toward the cover when the converter locks
+    const lockPiston = cylinderAlongX(0.34, 0.34, 0.03, metal("#9a6a3a", { metalness: 0.4, roughness: 0.6 }), "lockup", 48);
+    lockPiston.position.x = 0.22;
+    turbineGroup.add(lockPiston);
+    const lockGlow = new THREE.Mesh(
+        new THREE.TorusGeometry(0.34, 0.012, 8, 64).rotateY(Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: "#00e5ff", emissive: "#00e5ff", emissiveIntensity: 0, toneMapped: false })
+    );
+    lockGlow.position.x = 0.22;
+    converter.add(lockGlow);
+ 
+    const hub = cylinderAlongX(0.12, 0.12, 0.62, metal("#8c9ba8", { roughness: 0.25 }), null, 32);
+    hub.position.x = 0.05;
+    converter.add(hub);
+ 
+    // planetary sets
     
