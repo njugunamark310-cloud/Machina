@@ -575,3 +575,16 @@ function externalGear(teeth, boreRadius, lightening) {
         geometryCache.set(id, geometry);
         return geometry;
     }
+
+     // Gear axes run along world X: the pivot turns local Z into world X.
+    function makeGear(geometry, color, position, partKey) {
+        const mesh = new THREE.Mesh(geometry, metal(color));
+        mesh.userData.partKey = partKey;
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        const pivot = new THREE.Group();
+        pivot.rotation.y = Math.PI / 2;
+        pivot.position.copy(position);
+        pivot.add(mesh);
+        return { pivot, mesh };
+    }
