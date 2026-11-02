@@ -41,3 +41,29 @@ function sendJSON(res, statusCode, data) {
 
   res.end(JSON.stringify(data));
 }
+
+// Read JSON data from an incoming request
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+
+    req.on('data', chunk => {
+      body += chunk;
+
+      if (body.length > 32 * 1024) {
+        reject(new Error('Request body is too large.'));
+        req.destroy();
+      }
+    });
+
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error('Invalid JSON request.'));
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
