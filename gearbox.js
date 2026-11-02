@@ -831,4 +831,48 @@ function externalGear(teeth, boreRadius, lightening) {
     scene.add(housing);
  
     root.traverse((o) => { if (o.isMesh && o.material && !o.material.isMeshBasicMaterial) { o.castShadow = o.castShadow || false; } });
-    
+
+    // part info
+     const staticInfo = {
+        "flywheel": ["Drive Plate / Flywheel", "Bolted to the crankshaft. In an automatic it is a thin drive plate that turns the torque converter cover at engine speed.", "Steel simulation", "Carries engine torque into the converter."],
+        "input-shaft": ["Input Shaft", "Splined to the converter turbine. It feeds the sun gears of the three planetary sets, so it turns at turbine speed, not engine speed.", "Hardened steel simulation", "Delivers torque to the gear sets."],
+        "output-shaft": ["Output Shaft", "Joined to the planet carriers. It always turns with the wheels, multiplied by the final drive.", "Hardened steel simulation", "Sends torque to the driveshaft."],
+        "flange": ["Output Flange", "Where the gearbox hands torque to the driveshaft. The AWD module will connect here.", "Forged steel simulation", "Connects to the driveshaft."],
+        "converter": ["Torque Converter", "A fluid coupling between engine and gearbox. It lets the engine idle at a standstill and multiplies torque up to about 1.9x at stall, then locks up at cruise to avoid slip losses.", "Welded steel, transparent shell", "Replaces the clutch pedal."],
+        "impeller": ["Impeller (Pump)", "Spins with the engine and flings oil outward toward the turbine.", "Stamped steel simulation", "Drives the fluid."],
+        "turbine": ["Turbine", "Catches the oil flow and is splined to the input shaft. It lags the impeller when the converter slips.", "Stamped steel simulation", "Receives torque from the fluid."],
+        "stator-blades": ["Stator", "Redirects returning oil so it pushes the impeller forward. This is what multiplies torque. A one-way clutch lets it freewheel once speeds match.", "Cast aluminium simulation", "Multiplies torque at low speed."],
+        "lockup": ["Lock-up Clutch", "Presses the turbine to the converter cover and bypasses the fluid. Watch the cyan ring: it closes in the higher gears at light throttle.", "Friction lining on steel", "Removes slip for efficiency."],
+        "valve-body": ["Valve Body", "The hydraulic brain. Solenoids route pressure to each shift element. Cyan channels light up when their element is applied.", "Aluminium simulation", "Applies and releases the shift elements."]
+    };
+ 
+    function infoFor(key) {
+        if (staticInfo[key]) return staticInfo[key];
+        const index = Number(key.split("-")[1]);
+ 
+        if (key.startsWith("element-")) {
+            const name = key.slice(8);
+            const gears = GEARS.filter((g) => g.elements.includes(name)).map((g) => g.label).join(", ");
+            return [`Shift Element ${name}`, `A stack of steel and friction discs squeezed by a hydraulic piston. It holds or couples part of a planetary set. Applied in gears: ${gears}. (Layout is simplified for this simulation.)`, "Steel and friction lining", "Locks a planetary member."];
+        }
+        const set = PLANETARY_SETS[index];
+        if (!set) return null;
+        if (key.startsWith("sun-")) return [`Sun Gear (${set.name})`, `${set.sun} teeth at the centre of the set, driven by the input shaft.`, "Case-hardened steel simulation", "Drives the planets."];
+        if (key.startsWith("planet-")) return [`Planet Gears (${set.name})`, `${set.planets} planets of ${set.planet} teeth mesh with both the sun and the ring. They orbit on the carrier while spinning on their own pins.`, "Case-hardened steel simulation", "Transfer torque between sun, ring and carrier."];
+        if (key.startsWith("ring-")) return [`Ring Gear (${set.name})`, `${set.ring} internal teeth. Fixing or driving the ring changes the ratio of the set.`, "Case-hardened steel simulation", "Reacts or drives the set."];
+        if (key.startsWith("carrier-")) return [`Planet Carrier (${set.name})`, "Holds the planets on their pins. All three carriers are tied to the output shaft in this simplified layout.", "Cast steel simulation", "Carries the planets round."];
+        return null;
+    }
+ 
+    const MATERIAL_HIGHLIGHT = new THREE.Color("#00e5ff");
+    let selected = null;
+ 
+    function showInfo(key) {
+        const info = key ? infoFor(key) : null;
+        if (ui.partName) ui.partName.textContent = info ? info[0].toUpperCase() : "NO PART SELECTED";
+        if (ui.partDesc) ui.partDesc.textContent = info ? info[1] : "Click a component in the gearbox to inspect it.";
+        if (ui.partMaterial) ui.partMaterial.textContent = info ? info[2] : "—";
+        if (ui.partFunction) ui.partFunction.textContent = info ? info[3] : "—";
+    }
+    showInfo(null);
+ 
