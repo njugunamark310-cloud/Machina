@@ -712,3 +712,20 @@ function externalGear(teeth, boreRadius, lightening) {
         for (const side of [-1, 1]) {
             const plate = cylinderAlongX(set.orbit + 0.06, set.orbit + 0.06, 0.016, plateMat, side === -1 ? `carrier-${index}` : null, 64);
             plate.position.x = side * 0.095;
+        
+     // keep the plate clear: cut-out look via a darker inner disc
+            carrier.add(plate);
+            const hubDisc = cylinderAlongX(0.1, 0.1, 0.03, shaftMat, null, 32);
+            hubDisc.position.x = side * 0.095;
+            carrier.add(hubDisc);
+        }
+        const planets = [];
+        for (let i = 0; i < set.planets; i++) {
+            const planet = makeGear(externalGear(set.planet, 0.03, false), gearColors.planet, new THREE.Vector3(set.x, 0, 0), `planet-${index}`);
+            pickables.push(planet.mesh);
+            root.add(planet.pivot);
+            const pin = cylinderAlongX(0.026, 0.026, 0.22, shaftMat, null, 16);
+            carrier.add(pin);
+            planets.push({ ...planet, pin, index: i });
+        }
+        
