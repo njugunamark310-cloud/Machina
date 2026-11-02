@@ -612,3 +612,22 @@ function externalGear(teeth, boreRadius, lightening) {
     inputMark.position.set(-1.25, 0.075, 0);
     inputGroup.add(inputMark);
     root.add(inputGroup);
+
+     // Output shaft (carriers -> driveshaft)
+    const outputGroup = new THREE.Group();
+    const outputShaft = cylinderAlongX(0.095, 0.095, 0.95, shaftMat, "output-shaft", 32);
+    outputShaft.position.x = 1.85;
+    outputGroup.add(outputShaft);
+    const flange = cylinderAlongX(0.3, 0.3, 0.08, metal("#8c9ba8", { roughness: 0.25 }), "flange", 64);
+    flange.position.x = 2.25;
+    outputGroup.add(flange);
+    for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TWO_PI;
+        const bolt = cylinderAlongX(0.026, 0.026, 0.1, metal("#d7e6f5", { roughness: 0.2 }), null, 12);
+        bolt.position.set(2.25, Math.cos(a) * 0.22, Math.sin(a) * 0.22);
+        outputGroup.add(bolt);
+    }
+    const flangeMark = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.04), markMat);
+    flangeMark.position.set(2.3, 0.24, 0);
+    outputGroup.add(flangeMark);
+    root.add(outputGroup);
