@@ -120,4 +120,63 @@ function upshiftRpm(throttle, sport) {
 function downshiftRpm(throttle, sport) {
     return (sport ? 2600 : 1300) + clamp(throttle, 0, 1) * (sport ? 1900 : 1700);
 }
+
+// Drivetrain state
+function createDrivetrain() {
+    return {
+        selector: "P",       // P R N D S M
+        gear: 0,             // gear currently carrying torque (signed, 0 = none)
+        targetGear: 0,
+        fromGear: 0,
+        shift: 0,            // 0..1 progress of the active shift (0 = none)
+        shifting: false,
+        shiftTimer: 0,
+        shiftTime: 0.16,
+        shiftSeq: 0,         // increments on every shift, for sound and UI
+        shiftKind: "",       // "UP" | "DOWN"
+        holdTimer: 0,        // blocks a second shift right after the first
+        manualGear: 1,
+        elements: { A: 0, B: 0, C: 0, D: 0, E: 0 },
+        speed: 0,
+        rpm: IDLE_RPM,
+        omega: (IDLE_RPM * TWO_PI) / 60,
+        turbineRpm: 0,
+        throttle: 0,
+        throttleRate: 0,
+        brake: 0,
+        running: true,
+        lockup: 0,           // 0 = converter open, 1 = locked
+        slip: 0,
+        torqueMult: 1,
+        inputRpm: 0,
+        outputRpm: 0,
+        engineTorque: 0,
+        wheelTorque: 0,
+        speedKmh: 0,
+        overRev: false,
+        ratioNow: 0,
+        message: "",
+        messageTimer: 0
+    };
+}
+ 
+function say(s, text, time = 2) { s.message = text; s.messageTimer = time; }
+ 
+function requestSelector(s, sel) {
+    if (sel === s.selector) return { ok: true };
+    const moving = Math.abs(s.speed) > 1.2;
+ 
+    if ((sel === "P") && moving) { say(s, "PARK BLOCKED: STILL MOVING"); return { ok: false }; }
+    if (sel === "R" && s.speed > 1.2) { say(s, "REVERSE BLOCKED: STOP FIRST"); return { ok: false }; }
+    if ((sel === "D" || sel === "S" || sel === "M") && s.speed < -1.2) { say(s, "DRIVE BLOCKED: STOP FIRST"); return { ok: false }; }
+ 
+    s.selector = sel;
+    if (sel === "R") startShift(s, -1);
+    else if (sel === "P" || sel === "N") startShift(s, 0);
+    else if (sel === "M") s.manualGear = clamp(s.gear > 0 ? s.gear : 1, 1, TOP_GEAR);
+    else if (s.gear <= 0) startShift(s, 1);
+    return { ok: true };
+}
+
+
  
