@@ -602,3 +602,13 @@ function externalGear(teeth, boreRadius, lightening) {
     flywheelMark.position.set(0.055, 0.5, 0);
     flywheelGroup.add(flywheelMark);
     root.add(flywheelGroup);
+
+    // Input shaft (turbine -> sun gears)
+    const inputGroup = new THREE.Group();
+    const inputShaft = cylinderAlongX(0.07, 0.07, 3.7, inputShaftMat, "input-shaft", 32);
+    inputShaft.position.x = -0.35;
+    inputGroup.add(inputShaft);
+    const inputMark = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.035, 0.035), markMat);
+    inputMark.position.set(-1.25, 0.075, 0);
+    inputGroup.add(inputMark);
+    root.add(inputGroup);
