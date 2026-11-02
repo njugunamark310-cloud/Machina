@@ -1128,3 +1128,14 @@ function externalGear(teeth, boreRadius, lightening) {
             setGlow(unit.sun.mesh, glowCyan, sim.inputRpm > 30 ? 0.12 + torqueFraction * 0.3 : 0);
             unit.planets.forEach((p) => setGlow(p.mesh, glowOrange, loaded ? 0.1 + torqueFraction * 0.7 : 0));
         });
+
+        // shift elements: discs squeeze together, rim and hydraulic channel glow
+        for (const name of ELEMENTS) {
+            const v = sim.elements[name];
+            const e = elementPacks[name];
+            e.discs.forEach((d) => { d.position.x = d.userData.baseX * (1 - 0.42 * v); });
+            e.piston.position.x = 0.15 - v * 0.06;
+            e.glow.material.emissiveIntensity = v * 2.6;
+            e.label.material.opacity = 0.55 + v * 0.45;
+            channelMats[name].emissiveIntensity = v * (1.6 + Math.sin(time * 0.012) * 0.3);
+        }
