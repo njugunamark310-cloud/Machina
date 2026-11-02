@@ -490,4 +490,18 @@ const scene = new THREE.Scene();
     floor.add(shadowCatcher);
     scene.add(floor);
 
+// Materials
+ const metal = (color, extra = {}) =>
+        new THREE.MeshPhysicalMaterial({
+            color, metalness: 0.9, roughness: 0.3, clearcoat: 0.25, clearcoatRoughness: 0.35,
+            emissive: "#000000", ...extra
+        });
+ 
+    const shaftMat = metal("#c3ced9", { roughness: 0.2 });
+    const inputShaftMat = metal("#48c9d8", { roughness: 0.25 });
+    const hubMat = metal("#6f8196");
+    const markMat = new THREE.MeshStandardMaterial({ color: COLORS.orange, emissive: COLORS.orange, emissiveIntensity: 2.5 });
+    const gearColors = { sun: "#2b8fa3", planet: "#7a8ea6", ring: "#4a5d72", carrier: "#8a6a4a" };
+
+
 
