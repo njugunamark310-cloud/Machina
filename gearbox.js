@@ -560,3 +560,18 @@ function externalGear(teeth, boreRadius, lightening) {
         geometryCache.set(id, geometry);
         return geometry;
     }
+
+    // internal gear (ring): solid outer band with teeth pointing inward
+    function ringGear(teeth) {
+        const id = `ring${teeth}`;
+        if (geometryCache.has(id)) return geometryCache.get(id);
+        const pitch = teeth * MODULE;
+        const shape = new THREE.Shape();
+        shape.absarc(0, 0, pitch + 0.07, 0, TWO_PI, false);
+        const hole = new THREE.Path();
+        toothProfile(hole, teeth, pitch, true);
+        shape.holes.push(hole);
+        const geometry = extrude(shape, GEAR_WIDTH);
+        geometryCache.set(id, geometry);
+        return geometry;
+    }
