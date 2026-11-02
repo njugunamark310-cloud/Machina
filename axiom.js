@@ -12,9 +12,7 @@
   // AXIOM interface elements
   const log = document.getElementById('axiom-log');
   const form = document.getElementById('axiom-form');
-  const input = document.getElementById('axiom-input')
-
-})();
+  const input = document.getElementById('axiom-input');
 
  // Display a message in the AXIOM chat
   function addMessage(text, sender) {
@@ -97,3 +95,4 @@
 
     input.value = '';
   });
+})();
