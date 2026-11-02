@@ -503,5 +503,60 @@ const scene = new THREE.Scene();
     const markMat = new THREE.MeshStandardMaterial({ color: COLORS.orange, emissive: COLORS.orange, emissiveIntensity: 2.5 });
     const gearColors = { sun: "#2b8fa3", planet: "#7a8ea6", ring: "#4a5d72", carrier: "#8a6a4a" };
 
+// Gear geometry: bevelled, with flank points for a rounder tooth
+ const GEAR_WIDTH = 0.14;
+    const geometryCache = new Map();
+ 
+    function toothProfile(shape, teeth, pitch, internal) {
+        const add = internal ? 0.009 : -0.012;      // root offset from pitch circle
+        const tipOffset = internal ? -0.0115 : 0.0095;
+        const root = pitch + add;
+        const tip = pitch + tipOffset;
+        const step = TWO_PI / teeth;
+        const pts = [[-0.34, root], [-0.22, root * 0.5 + tip * 0.5], [-0.14, tip], [0.14, tip], [0.22, root * 0.5 + tip * 0.5], [0.34, root]];
+        const path = shape;
+        let first = true;
+        for (let k = 0; k < teeth; k++) {
+            for (const [off, r] of pts) {
+                const a = k * step + off * step;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if (first) { path.moveTo(x, y); first = false; } else path.lineTo(x, y);
+            }
+        }
+        path.closePath();
+    }
+ 
+    function extrude(shape, depth) {
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+            depth: depth - 0.01, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.003,
+            bevelOffset: -0.003, bevelSegments: 1, curveSegments: 20
+        });
+        geometry.translate(0, 0, -(depth - 0.01) / 2);
+        geometry.computeVertexNormals();
+        return geometry;
+    }
 
+// external gear (sun/planet)
 
+function externalGear(teeth, boreRadius, lightening) {
+        const id = `ext${teeth}-${boreRadius}-${lightening}`;
+        if (geometryCache.has(id)) return geometryCache.get(id);
+        const pitch = teeth * MODULE;
+        const shape = new THREE.Shape();
+        toothProfile(shape, teeth, pitch, false);
+        const bore = new THREE.Path();
+        bore.absarc(0, 0, boreRadius, 0, TWO_PI, true);
+        shape.holes.push(bore);
+        if (lightening) {
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * TWO_PI;
+                const hole = new THREE.Path();
+                hole.absarc(Math.cos(a) * pitch * 0.58, Math.sin(a) * pitch * 0.58, pitch * 0.17, 0, TWO_PI, true);
+                shape.holes.push(hole);
+            }
+        }
+        const geometry = extrude(shape, GEAR_WIDTH);
+        geometryCache.set(id, geometry);
+        return geometry;
+    }
