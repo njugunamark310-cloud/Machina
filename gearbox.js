@@ -178,5 +178,27 @@ function requestSelector(s, sel) {
     return { ok: true };
 }
 
+// paddle shift (manual mode)
+function paddleShift(s, delta) {
+    if (s.selector !== "M" && (s.selector === "D" || s.selector === "S")) {
+        s.selector = "M";
+        s.manualGear = clamp(s.gear > 0 ? s.gear : 1, 1, TOP_GEAR);
+    }
+    if (s.selector !== "M") return;
+    s.manualGear = clamp(s.manualGear + delta, 1, TOP_GEAR);
+}
+ 
+function startShift(s, target) {
+    if (target === s.targetGear && !s.shifting) return;
+    s.fromGear = s.gear;
+    s.targetGear = target;
+    s.shifting = true;
+    s.shift = 0;
+    s.shiftTimer = 0;
+    s.shiftSeq += 1;
+    const toward = Math.abs(target);
+    const away = Math.abs(s.fromGear);
+    s.shiftKind = target === 0 || toward < away ? "DOWN" : "UP";
+
 
  
