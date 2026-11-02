@@ -1090,3 +1090,41 @@ function externalGear(teeth, boreRadius, lightening) {
  
         renderTelemetry(dt);
     }
+
+    // per frame visuals
+    const glowOrange = new THREE.Color(COLORS.orange);
+    const glowCyan = new THREE.Color(COLORS.cyan);
+    const setGlow = (mesh, color, intensity) => {
+        mesh.material.emissive.copy(color);
+        mesh.material.emissiveIntensity = intensity;
+    };
+ 
+    function updateVisuals(time) {
+        flywheelGroup.rotation.x = angle.flywheel;
+        impeller.rotation.x = angle.flywheel;
+        turbineGroup.rotation.x = angle.input;
+        // stator is held by its one-way clutch while the converter multiplies torque
+        stator.rotation.x = sim.torqueMult > 1.03 ? 0 : angle.input * 0.9;
+        inputGroup.rotation.x = angle.input;
+        outputGroup.rotation.x = angle.output;
+ 
+        const torqueFraction = clamp(Math.abs(sim.wheelTorque) / 5000, 0, 1);
+ 
+        planetary.forEach((unit, j) => {
+            const thetaSun = angle.input * SUN_SPEED[j];
+            const thetaCarrier = angle.output;
+            const result = planetaryAngles(unit.set, thetaSun, thetaCarrier);
+ 
+            unit.sun.mesh.rotation.z = thetaSun;
+            unit.ring.mesh.rotation.z = result.ring;
+            unit.carrier.rotation.x = thetaCarrier;
+            result.planets.forEach((p, i) => {
+                const planet = unit.planets[i];
+                planet.mesh.rotation.z = p.spin;
+                planet.pivot.position.set(unit.set.x, Math.sin(p.phi) * unit.set.orbit, -Math.cos(p.phi) * unit.set.orbit);
+            });
+ 
+            const loaded = sim.gear !== 0 || sim.shifting;
+            setGlow(unit.sun.mesh, glowCyan, sim.inputRpm > 30 ? 0.12 + torqueFraction * 0.3 : 0);
+            unit.planets.forEach((p) => setGlow(p.mesh, glowOrange, loaded ? 0.1 + torqueFraction * 0.7 : 0));
+        });
