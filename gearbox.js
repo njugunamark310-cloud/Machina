@@ -631,3 +631,8 @@ function externalGear(teeth, boreRadius, lightening) {
     flangeMark.position.set(2.3, 0.24, 0);
     outputGroup.add(flangeMark);
     root.add(outputGroup);
+
+    // Torque Converter
+     const converter = new THREE.Group();
+    converter.position.set(-2.1, 0, 0);
+    root.add(converter);
