@@ -764,3 +764,16 @@ function externalGear(teeth, boreRadius, lightening) {
         );
         pack.add(glow);
         
+         // piston plate that pushes the discs together
+        const piston = cylinderAlongX(0.3, 0.3, 0.025, metal("#e87532", { roughness: 0.3 }), null, 32);
+        piston.position.x = 0.15;
+        pack.add(piston);
+ 
+        // element letter label on a sprite
+        const label = makeLabel(name);
+        label.position.set(0, 0.74, 0);
+        pack.add(label);
+ 
+        root.add(pack);
+        elementPacks[name] = { pack, discs, glow, piston, label };
+    }
