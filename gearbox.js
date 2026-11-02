@@ -96,3 +96,17 @@ function ringAngle(thetaPlanet, planetTeeth, ringTeeth, phi) {
     const dr = wrapCentered((rp * dp + pitch / 2) / rr, TWO_PI / ringTeeth);
     return phi - dr;
 }
+
+// Everything is derived from the sun and carrier angle, so teeth never clash.
+function planetaryAngles(set, thetaSun, thetaCarrier) {
+    const planets = [];
+    let ring = 0;
+    for (let i = 0; i < set.planets; i++) {
+        const phi = thetaCarrier + (i / set.planets) * TWO_PI;
+        const spin = meshPartner(thetaSun, set.sun, set.planet, phi);
+        planets.push({ phi, spin });
+        if (i === 0) ring = ringAngle(spin, set.planet, set.ring, phi);
+    }
+    return { planets, ring };
+}
+ 
