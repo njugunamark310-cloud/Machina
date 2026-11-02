@@ -1243,3 +1243,30 @@ function externalGear(teeth, boreRadius, lightening) {
         renderer.setAnimationLoop(frame);
     };
     const stop = () => { looping = false; renderer.setAnimationLoop(null); };
+
+     // The drivetrain keeps running when the 3D view is off-screen, so the engine
+    // (and its sound) never freezes while you scroll.
+    let simLast = performance.now();
+    function simTick(now) {
+        const dt = Math.min((now - simLast) / 1000, 0.1);
+        simLast = now;
+        stepSim(dt);
+        requestAnimationFrame(simTick);
+    }
+    requestAnimationFrame(simTick);
+ 
+    function resize() {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        if (!w || !h) return;
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+        composer.setPixelRatio(renderer.getPixelRatio());
+        composer.setSize(w, h);
+    }
+ 
+    new ResizeObserver(resize).observe(container);
+    new IntersectionObserver((entries) => (entries[0].isIntersecting ? start() : stop())).observe(container);
+    start();
+}
