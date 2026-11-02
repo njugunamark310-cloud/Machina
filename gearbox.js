@@ -777,3 +777,41 @@ function externalGear(teeth, boreRadius, lightening) {
         root.add(pack);
         elementPacks[name] = { pack, discs, glow, piston, label };
     }
+       function makeLabel(text) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "rgba(5,8,15,0.7)";
+        ctx.beginPath(); ctx.arc(64, 64, 52, 0, TWO_PI); ctx.fill();
+        ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 5; ctx.stroke();
+        ctx.fillStyle = "#ffffff"; ctx.font = "bold 64px monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(text, 64, 68);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, toneMapped: false }));
+        sprite.scale.setScalar(0.2);
+        sprite.renderOrder = 8;
+        return sprite;
+    }
+ 
+//Valve body: hydraulic channels light up with element pressure
+
+     const valveBody = new THREE.Group();
+    const valveBlock = new THREE.Mesh(new RoundedBoxGeometry(3.6, 0.16, 0.9, 3, 0.03), metal("#2d3d4f", { roughness: 0.45 }));
+    valveBlock.position.set(-0.1, -0.98, 0);
+    valveBlock.castShadow = true;
+    valveBody.add(valveBlock);
+    addPick(valveBlock, "valve-body");
+    const channelMats = {};
+    for (const name of ELEMENTS) {
+        const x = ELEMENT_X[name];
+        channelMats[name] = new THREE.MeshStandardMaterial({ color: "#0a3a48", emissive: "#00e5ff", emissiveIntensity: 0, toneMapped: false });
+        const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 12), channelMats[name]);
+        feed.position.set(x, -0.77, 0);
+        valveBody.add(feed);
+        const groove = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.8), channelMats[name]);
+        groove.position.set(x, -0.896, 0);
+        valveBody.add(groove);
+    }
+    root.add(valveBody);
