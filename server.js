@@ -67,3 +67,30 @@ function readRequestBody(req) {
     req.on('error', reject);
   });
 }
+
+// Validate incoming conversation messages
+function cleanMessages(messages) {
+  if (!Array.isArray(messages)) {
+    throw new Error('Messages must be an array.');
+  }
+
+  const cleaned = messages.slice(-12);
+
+  if (cleaned.length === 0) {
+    throw new Error('No messages provided.');
+  }
+
+  for (const message of cleaned) {
+    if (
+      !message ||
+      !['user', 'assistant'].includes(message.role) ||
+      typeof message.content !== 'string' ||
+      message.content.trim().length === 0 ||
+      message.content.length > 1000
+    ) {
+      throw new Error('Invalid conversation message.');
+    }
+  }
+
+  return cleaned;
+}
