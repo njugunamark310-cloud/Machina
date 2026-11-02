@@ -85,3 +85,14 @@ const wrapCentered = (x, period) =>
 function meshPartner(thetaA, teethA, teethB, phi) {
     return -(teethA / teethB) * (thetaA - phi) + phi + Math.PI - Math.PI / teethB;
 }
+
+// Internal ring angle that meshes with a planet. delta* are tooth-centre offsets
+// from the contact direction; the ring must have a tooth where the planet has a gap.
+function ringAngle(thetaPlanet, planetTeeth, ringTeeth, phi) {
+    const dp = wrapCentered(phi - thetaPlanet, TWO_PI / planetTeeth);
+    const rp = planetTeeth * MODULE;
+    const rr = ringTeeth * MODULE;
+    const pitch = TWO_PI * MODULE;
+    const dr = wrapCentered((rp * dp + pitch / 2) / rr, TWO_PI / ringTeeth);
+    return phi - dr;
+}
