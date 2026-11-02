@@ -204,5 +204,71 @@ function startShift(s, target) {
     s.shiftTime = garage ? 0.45 : s.selector === "S" || s.selector === "M" ? 0.11 : s.throttle > 0.7 ? 0.12 : 0.17;
 }
 
+function updateElements(s, dt) {
+    const target = (g) => (g === 0 ? "" : gearEntry(g).elements);
+    const from = target(s.fromGear);
+    const to = target(s.shifting ? s.targetGear : s.gear);
+    for (const e of ELEMENTS) {
+        const was = from.includes(e);
+        const will = to.includes(e);
+        let value = was && will ? 1 : will ? s.shift : was ? 1 - s.shift : 0;
+        if (!s.shifting) value = will ? 1 : 0;
+        s.elements[e] = value;
+    }
+}
+
+function chooseGear(s, dt) {
+    if (s.holdTimer > 0) s.holdTimer -= dt;
+    if (s.shifting || s.holdTimer > 0) return;
+    const g = s.gear;
+ 
+    if (s.selector === "D" || s.selector === "S") {
+        if (g <= 0) { startShift(s, 1); return; }
+        const sport = s.selector === "S";
+        const kickdown = s.throttle > 0.92 && s.throttleRate > 1.2;
+        const wheelRpm = (Math.abs(s.speed) / (TWO_PI * WHEEL_RADIUS)) * 60;
+        const rpmIn = (n) => wheelRpm * FINAL_DRIVE * gearRatio(n);
+ 
+        if (g < TOP_GEAR && rpmIn(g) > upshiftRpm(s.throttle, sport) && rpmIn(g + 1) > 1200) {
+            startShift(s, g + 1);
+        } else if (g > 1 && (rpmIn(g) < downshiftRpm(s.throttle, sport) || (kickdown && rpmIn(g - 1) < 6200 && s.rpm < 4500 && g > 2))) {
+            startShift(s, kickdown && rpmIn(g - 2) < 5800 && g > 3 ? g - 2 : g - 1);
+        }
+    } else if (s.selector === "M") {
+        if (g > 0 && s.manualGear !== g) startShift(s, s.manualGear);
+        else if (g <= 0) startShift(s, s.manualGear);
+        // auto upshift just before the limiter, auto downshift to stop stalling
+        const wheelRpm = (Math.abs(s.speed) / (TWO_PI * WHEEL_RADIUS)) * 60;
+        if (g > 1 && wheelRpm * FINAL_DRIVE * gearRatio(g) < 1000) s.manualGear = g - 1;
+        if (g > 0 && g < TOP_GEAR && s.rpm > REDLINE - 60 && s.throttle > 0.5) s.manualGear = g + 1;
+    }
+}
+ 
+function stepDrivetrain(s, dt, ctrl) {
+    const running = ctrl.running !== false;
+    s.running = running;
+    const prevThrottle = s.throttle;
+    s.throttle = running ? clamp(ctrl.throttle, 0, 1) : 0;
+    s.throttleRate = approach(s.throttleRate, (s.throttle - prevThrottle) / Math.max(dt, 1e-4), 12, dt);
+    s.brake = clamp(ctrl.brake, 0, 1);
+ 
+    if (s.messageTimer > 0) { s.messageTimer -= dt; if (s.messageTimer <= 0) s.message = ""; }
+ 
+    chooseGear(s, dt);
+
+    // Shift progress: fast ramp, ratio blends between the old and new gear
+    if (s.shifting) {
+        s.shiftTimer += dt;
+        s.shift = clamp(s.shiftTimer / s.shiftTime, 0, 1);
+        if (s.shift >= 1) {
+            s.shifting = false;
+            s.gear = s.targetGear;
+            s.fromGear = s.gear;
+            s.shift = 0;
+            s.holdTimer = s.shiftTime > 0.3 ? 0.2 : 0.55;
+        }
+    }
+    updateElements(s, dt);
+
 
  
