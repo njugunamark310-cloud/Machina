@@ -1213,3 +1213,33 @@ function externalGear(teeth, boreRadius, lightening) {
         const info = `${sim.selector}${sim.selector === "M" ? ` · HOLD ${sim.manualGear}` : ""}  ·  CONVERTER ${lock}  ·  SLIP ${Math.round(Math.abs(sim.slip))} RPM`;
         text(statusLine, toastTimer > 0 ? `${toast}   |   ${info}` : info);
     }
+
+    // loop / sizing
+
+    let lastTime = 0;
+    let looping = false;
+ 
+    function frame(time) {
+        const dt = Math.min((time - lastTime) / 1000, 0.1);
+        lastTime = time;
+ 
+        if (tween.active) {
+            tween.t = Math.min(tween.t + dt / 1.1, 1);
+            const eased = 1 - Math.pow(1 - tween.t, 3);
+            camera.position.lerpVectors(tween.fromP, cameraStart, eased);
+            controls.target.lerpVectors(tween.fromT, targetStart, eased);
+            if (tween.t >= 1) tween.active = false;
+        }
+ 
+        controls.update();
+        updateVisuals(time);
+        composer.render(dt);
+    }
+ 
+    const start = () => {
+        if (looping) return;
+        looping = true;
+        lastTime = performance.now();
+        renderer.setAnimationLoop(frame);
+    };
+    const stop = () => { looping = false; renderer.setAnimationLoop(null); };
