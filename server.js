@@ -31,3 +31,13 @@ Your behaviour:
 - Never invent sensor readings.
 - Keep answers focused and educational.
 `;
+
+// Send JSON responses to the browser
+function sendJSON(res, statusCode, data) {
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store'
+  });
+
+  res.end(JSON.stringify(data));
+}
