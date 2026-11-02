@@ -15,3 +15,23 @@
   const input = document.getElementById('axiom-input')
 
 })();
+
+ // Display a message in the AXIOM chat
+  function addMessage(text, sender) {
+    const message = document.createElement('div');
+
+    message.classList.add('msg');
+
+    if (sender === 'ai') {
+      message.classList.add('msg-ai');
+    } else {
+      message.classList.add('msg-user');
+    }
+
+    message.textContent = text;
+    log.appendChild(message);
+
+    log.scrollTop = log.scrollHeight;
+
+    return message;
+  }
