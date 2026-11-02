@@ -66,3 +66,9 @@
       sendButton.textContent = state ? 'THINKING...' : 'SEND';
     }
   }
+
+    // Make sure the AXIOM interface exists
+  if (!log || !form || !input) {
+    console.error('AXIOM: Chat interface elements not found.');
+    return;
+  }
