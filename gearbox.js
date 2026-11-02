@@ -1021,3 +1021,54 @@ function externalGear(teeth, boreRadius, lightening) {
         button.textContent = `${label}: ${on ? "ON" : "OFF"}`;
         button.classList.toggle("active", on);
     };
+
+    // The old AUTO button becomes the SPORT toggle (sharper shifts, higher shift points)
+    ui.auto?.addEventListener("click", () => {
+        sport = !sport;
+        if (sport) { if (sim.selector === "D" || sim.selector === "N" || sim.selector === "P") requestSelector(sim, sim.selector === "D" ? "S" : sim.selector); }
+        else if (sim.selector === "S") requestSelector(sim, "D");
+        setToggle(ui.auto, sport, "SPORT MODE");
+    });
+    ui.demo?.addEventListener("click", () => {
+        auto.demo = !auto.demo;
+        auto.t = 0;
+        if (!auto.demo) { for (const n of ["throttle", "brake"]) { sliders[n] = 0; if (ui[n]) ui[n].value = 0; } }
+        setToggle(ui.demo, auto.demo, "DEMO DRIVE");
+    });
+ 
+    let housingOn = true;
+    ui.housing?.addEventListener("click", () => {
+        housingOn = !housingOn;
+        housing.visible = housingOn;
+        setToggle(ui.housing, housingOn, "HOUSING");
+    });
+    setToggle(ui.auto, false, "SPORT MODE");
+    setToggle(ui.demo, false, "DEMO DRIVE");
+    setToggle(ui.housing, true, "HOUSING");
+ 
+    // camera fly-to
+    const tween = { active: false, t: 0, fromP: new THREE.Vector3(), fromT: new THREE.Vector3() };
+    controls.addEventListener("start", () => { tween.active = false; });
+    ui.reset?.addEventListener("click", () => {
+        if (prefersReducedMotion) { camera.position.copy(cameraStart); controls.target.copy(targetStart); return; }
+        tween.fromP.copy(camera.position);
+        tween.fromT.copy(controls.target);
+        tween.t = 0;
+        tween.active = true;
+    });
+ 
+    const angle = { flywheel: 0, input: 0, output: 0 };
+ 
+    function stepSim(dt) {
+        keyed.throttle = approach(keyed.throttle, keys.has("KeyW") ? 1 : 0, 7, dt);
+        keyed.brake = approach(keyed.brake, keys.has("KeyS") ? 1 : 0, 10, dt);
+        const hud = bus.hud || { throttle: 0, brake: 0 };
+        let user = {
+            throttle: Math.max(sliders.throttle, keyed.throttle, hud.throttle),
+            brake: Math.max(sliders.brake, keyed.brake, hud.brake)
+        };
+        if (auto.demo) {
+            user = autoDrive(sim, auto, user, dt);
+            if (ui.throttle) ui.throttle.value = user.throttle;
+            if (ui.brake) ui.brake.value = user.brake;
+        }
