@@ -1139,3 +1139,17 @@ function externalGear(teeth, boreRadius, lightening) {
             e.label.material.opacity = 0.55 + v * 0.45;
             channelMats[name].emissiveIntensity = v * (1.6 + Math.sin(time * 0.012) * 0.3);
         }
+
+         // lock-up clutch
+        lockPiston.position.x = 0.22 - sim.lockup * 0.07;
+        lockGlow.material.emissiveIntensity = sim.lockup * 3;
+        lockGlow.position.x = lockPiston.position.x;
+ 
+        if (selected && selected.material?.emissive) {
+            selected.material.emissive.copy(MATERIAL_HIGHLIGHT);
+            selected.material.emissiveIntensity = 0.7 + Math.sin(time * 0.006) * 0.2;
+        }
+ 
+        orangeLight.intensity = 10 + torqueFraction * 14;
+        bloomPass.strength = 0.45 + torqueFraction * 0.25;
+    }
