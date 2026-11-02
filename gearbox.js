@@ -65,3 +65,11 @@ function torqueCurve(rpm) {
     }
     return TORQUE_POINTS[TORQUE_POINTS.length - 1][1];
 }
+
+// planetary gear geometry 
+// Three sets in series. Ns + Nr = Ns + (Ns + 2 Np), so the ring has Ns + 2 Np teeth.
+const PLANETARY_SETS = [
+    { name: "Set 1", sun: 28, planet: 16, planets: 4, x: -0.62 },
+    { name: "Set 2", sun: 32, planet: 14, planets: 4, x: 0.14 },
+    { name: "Set 3", sun: 36, planet: 12, planets: 4, x: 0.82 }
+].map((s) => ({ ...s, ring: s.sun + 2 * s.planet, orbit: (s.sun + s.planet) * MODULE }));
