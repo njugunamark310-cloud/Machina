@@ -695,4 +695,20 @@ function externalGear(teeth, boreRadius, lightening) {
     converter.add(hub);
  
     // planetary sets
-    
+    const planetary = PLANETARY_SETS.map((set, index) => {
+        const sun = makeGear(externalGear(set.sun, 0.075, false), gearColors.sun, new THREE.Vector3(set.x, 0, 0), `sun-${index}`);
+        pickables.push(sun.mesh);
+        root.add(sun.pivot);
+ 
+        const ring = makeGear(ringGear(set.ring), gearColors.ring, new THREE.Vector3(set.x, 0, 0), `ring-${index}`);
+        pickables.push(ring.mesh);
+        root.add(ring.pivot);
+ 
+        const carrier = new THREE.Group();
+        carrier.position.set(set.x, 0, 0);
+        root.add(carrier);
+ 
+        const plateMat = metal(gearColors.carrier, { roughness: 0.35 });
+        for (const side of [-1, 1]) {
+            const plate = cylinderAlongX(set.orbit + 0.06, set.orbit + 0.06, 0.016, plateMat, side === -1 ? `carrier-${index}` : null, 64);
+            plate.position.x = side * 0.095;
