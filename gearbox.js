@@ -374,3 +374,33 @@ function autoDrive(s, a, user, dt) {
     }
     return { throttle, brake };
 }
+
+// gearbox 3D view and controls 
+
+const COLORS = { background: "#05080f", cyan: "#00e5ff", orange: "#ff8a00" };
+const SLOW_MOTION = 40;
+const RAD_PER_RPM_SEC = TWO_PI / 60 / SLOW_MOTION;
+const FLOOR_Y = -1.3;
+ 
+const $ = (selector) => document.querySelector(selector);
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+ 
+const container = $("#gearbox-canvas");
+ 
+if (container) init(container);
+else console.warn("Gearbox viewer container (#gearbox-canvas) was not found.");
+ 
+function init(container) {
+    const ui = {
+        reset: $("#gb-reset"), housing: $("#gb-housing"), auto: $("#gb-auto"), demo: $("#gb-demo"),
+        throttle: $("#gb-throttle"), clutch: $("#gb-clutch"), brake: $("#gb-brake"),
+        gear: $("#gb-gear"), rpm: $("#gb-rpm"), speed: $("#gb-speed"), ratio: $("#gb-ratio"),
+        input: $("#gb-input"), output: $("#gb-output"), torque: $("#gb-torque"),
+        couplingBar: $("#gb-coupling-bar"), rpmBar: $("#gb-rpm-bar"), message: $("#gb-message"),
+        gearButtons: [...document.querySelectorAll("[data-gear]")],
+        partName: $("#gb-part-name"), partDesc: $("#gb-part-desc"),
+        partMaterial: $("#gb-part-material"), partFunction: $("#gb-part-function"),
+        section: $("#gearbox-lab")
+    };
+
+
