@@ -1072,3 +1072,21 @@ function externalGear(teeth, boreRadius, lightening) {
             if (ui.throttle) ui.throttle.value = user.throttle;
             if (ui.brake) ui.brake.value = user.brake;
         }
+
+         // Link to the engine page as soon as it exists (first frame only, so the user can still switch it off).
+        if (!linkApplied && bus.engine) {
+            linkApplied = true;
+            bus.link.engine = true;
+            refreshLink();
+            window.dispatchEvent(new CustomEvent("machina-link-change"));
+        }
+        linked = !!(bus.link.engine && bus.engine);
+ 
+        stepDrivetrain(sim, dt, { ...user, running: linked ? bus.engine.running !== false : true });
+ 
+        angle.flywheel += sim.rpm * RAD_PER_RPM_SEC * dt;
+        angle.input += sim.inputRpm * RAD_PER_RPM_SEC * dt;
+        angle.output += sim.outputRpm * RAD_PER_RPM_SEC * dt;
+ 
+        renderTelemetry(dt);
+    }
