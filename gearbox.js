@@ -735,3 +735,32 @@ function externalGear(teeth, boreRadius, lightening) {
         });
         return { set, sun, ring, carrier, planets };
     });
+
+    // shift elements (clutch / brake packs)
+    // Alternating steel and friction discs. Applied pack: discs squeeze together and glow.
+    const ELEMENT_X = { A: -1.18, B: -0.2, C: 0.34, D: 1.12, E: 1.55 };
+    const steelMat = metal("#c3ced9", { roughness: 0.25 });
+    const frictionMat = metal("#8a5a3a", { metalness: 0.3, roughness: 0.75 });
+    const elementPacks = {};
+ 
+    for (const name of ELEMENTS) {
+        const pack = new THREE.Group();
+        pack.position.set(ELEMENT_X[name], 0, 0);
+        const discs = [];
+        for (let i = 0; i < 6; i++) {
+            const friction = i % 2 === 1;
+            const outer = name === "A" || name === "B" ? 0.56 : 0.5;
+            const disc = cylinderAlongX(outer, outer, 0.018, friction ? frictionMat : steelMat, i === 0 ? `element-${name}` : null, 64);
+            disc.position.x = (i - 2.5) * 0.034;
+            disc.userData.baseX = disc.position.x;
+            pack.add(disc);
+            discs.push(disc);
+        }
+        const hubRing = cylinderAlongX(0.17, 0.17, 0.18, hubMat, null, 32);
+        pack.add(hubRing);
+        const glow = new THREE.Mesh(
+            new THREE.TorusGeometry(0.56, 0.014, 10, 80).rotateY(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: "#ff8a00", emissive: "#ff8a00", emissiveIntensity: 0, toneMapped: false })
+        );
+        pack.add(glow);
+        
