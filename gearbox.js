@@ -324,4 +324,53 @@ function stepDrivetrain(s, dt, ctrl) {
         s.omega = Math.max(0, s.omega + ((engineTorque - reactOnEngine) / ENGINE_INERTIA) * h);
 
 
+        // vehicle
+        const driveForce = engaged ? (dir * toTurbine * overall * 0.93) / WHEEL_RADIUS : 0;
+        const v = s.speed;
+        const parked = s.selector === "P";
+        const holdBrake = parked ? 1e6 : 0;
+        const brakeForce = s.brake * BRAKE_N + holdBrake;
  
+        if (Math.abs(v) < 0.04 && Math.abs(driveForce) <= ROLLING_N + brakeForce) {
+            s.speed = 0;
+        } else {
+            const sign = v !== 0 ? Math.sign(v) : Math.sign(driveForce || 1);
+            const resist = ROLLING_N + DRAG_K * v * v + brakeForce;
+            const next = v + ((driveForce - sign * resist) / MASS) * h;
+            s.speed = v !== 0 && Math.sign(next) !== Math.sign(v) && Math.abs(driveForce) < resist ? 0 : next;
+        }
+ 
+        turbineTorque = toTurbine;
+        slipRpm = rpm - turbine;
+    }
+ 
+    s.rpm = clamp((s.omega * 60) / TWO_PI, 0, 9000);
+    s.overRev = s.rpm > REDLINE + 150;
+    s.slip = engaged ? slipRpm : 0;
+    s.torqueMult = engaged && s.lockup < 0.5 ? 1 + (STALL_MULT - 1) * clamp(1 - (s.turbineRpm / Math.max(s.rpm, 1)) / 0.85, 0, 1) : 1;
+ 
+    s.wheelTorque = (dir * turbineTorque * overall * 0.93);
+    s.speedKmh = s.speed * 3.6;
+    s.outputRpm = (s.speed / (TWO_PI * WHEEL_RADIUS)) * 60 * FINAL_DRIVE;
+    s.turbineRpm = engaged ? Math.abs(s.outputRpm) * ratio : 0;
+    s.inputRpm = approach(s.inputRpm, s.turbineRpm, 30, dt);
+ 
+    return s;
+}
+
+// driver aid: demo drive
+function createAuto() { return { t: 0, demo: false }; }
+ 
+function autoDrive(s, a, user, dt) {
+    a.t += dt;
+    let throttle = user.throttle;
+    let brake = user.brake;
+    if (a.demo) {
+        const c = a.t % 44;
+        if (c < 3) { throttle = 0; brake = 0; if (s.selector !== "D") requestSelector(s, "D"); }
+        else if (c < 24) { throttle = c < 14 ? 0.55 : 1.0; brake = 0; if (c > 14 && s.selector !== "S") requestSelector(s, "S"); }
+        else if (c < 34) { throttle = 0; brake = c < 27 ? 0.1 : 0.5; if (s.selector !== "D") requestSelector(s, "D"); }
+        else { throttle = 0; brake = 0.75; }
+    }
+    return { throttle, brake };
+}
