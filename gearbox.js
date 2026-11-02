@@ -199,6 +199,10 @@ function startShift(s, target) {
     const toward = Math.abs(target);
     const away = Math.abs(s.fromGear);
     s.shiftKind = target === 0 || toward < away ? "DOWN" : "UP";
+// Snappy: sport and kickdown shifts are the quickest; garage shifts are gentler.
+    const garage = target <= 0 || s.fromGear <= 0 || (target < 0 && s.fromGear > 0);
+    s.shiftTime = garage ? 0.45 : s.selector === "S" || s.selector === "M" ? 0.11 : s.throttle > 0.7 ? 0.12 : 0.17;
+}
 
 
  
