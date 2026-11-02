@@ -588,3 +588,17 @@ function externalGear(teeth, boreRadius, lightening) {
         pivot.add(mesh);
         return { pivot, mesh };
     }
+
+    // shafts and flywheel /drive plate
+    
+    const flywheelGroup = new THREE.Group();
+    flywheelGroup.position.set(-2.75, 0, 0);
+    const flywheel = cylinderAlongX(0.66, 0.66, 0.1, metal("#7c8a98", { roughness: 0.28 }), "flywheel", 64);
+    flywheelGroup.add(flywheel);
+    const ringGearTeeth = cylinderAlongX(0.68, 0.68, 0.05, metal("#5f6d7b", { roughness: 0.4 }), null, 96);
+    ringGearTeeth.position.x = 0.0;
+    flywheelGroup.add(ringGearTeeth);
+    const flywheelMark = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.05), markMat);
+    flywheelMark.position.set(0.055, 0.5, 0);
+    flywheelGroup.add(flywheelMark);
+    root.add(flywheelGroup);
