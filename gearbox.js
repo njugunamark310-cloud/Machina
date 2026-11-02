@@ -110,3 +110,14 @@ function planetaryAngles(set, thetaSun, thetaCarrier) {
     return { planets, ring };
 }
  
+// shift schedule
+// Upshift rpm and kickdown depend on throttle; sport mode holds gears longer.
+function upshiftRpm(throttle, sport) {
+    const base = sport ? 4300 : 2300;
+    const span = sport ? 2300 : 3000;
+    return base + clamp(throttle, 0, 1) * span;
+}
+function downshiftRpm(throttle, sport) {
+    return (sport ? 2600 : 1300) + clamp(throttle, 0, 1) * (sport ? 1900 : 1700);
+}
+ 
