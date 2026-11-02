@@ -815,3 +815,20 @@ function externalGear(teeth, boreRadius, lightening) {
         valveBody.add(groove);
     }
     root.add(valveBody);
+
+// Housing
+   const housingSize = [5.0, 1.95, 1.75];
+    const housing = new THREE.Group();
+    housing.position.set(-0.2, -0.05, 0);
+    housing.add(new THREE.Mesh(
+        new RoundedBoxGeometry(...housingSize, 4, 0.08),
+        new THREE.MeshPhysicalMaterial({ color: "#2a3b4d", metalness: 0.6, roughness: 0.4, transparent: true, opacity: 0.07, depthWrite: false })
+    ));
+    housing.add(new THREE.LineSegments(
+        new THREE.EdgesGeometry(new THREE.BoxGeometry(...housingSize)),
+        new THREE.LineBasicMaterial({ color: new THREE.Color(COLORS.cyan).multiplyScalar(1.4), transparent: true, opacity: 0.75, toneMapped: false })
+    ));
+    scene.add(housing);
+ 
+    root.traverse((o) => { if (o.isMesh && o.material && !o.material.isMeshBasicMaterial) { o.castShadow = o.castShadow || false; } });
+    
