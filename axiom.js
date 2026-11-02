@@ -35,3 +35,20 @@
 
     return message;
   }
+
+   // Read current MACHINA simulator values
+  function getSimulatorState() {
+    return {
+      engine: {
+        rpm: document.getElementById('rpm-value')?.textContent ?? 'Unavailable',
+        temperature: document.getElementById('temp-value')?.textContent ?? 'Unavailable',
+        boost: document.getElementById('boost-value')?.textContent ?? 'Unavailable'
+      },
+
+      gearbox: {
+        gear: document.getElementById('gb-gear')?.textContent ?? 'Unavailable',
+        rpm: document.getElementById('gb-rpm')?.textContent ?? 'Unavailable',
+        speed: document.getElementById('gb-speed')?.textContent ?? 'Unavailable'
+      }
+    };
+  }
