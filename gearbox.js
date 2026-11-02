@@ -728,4 +728,10 @@ function externalGear(teeth, boreRadius, lightening) {
             carrier.add(pin);
             planets.push({ ...planet, pin, index: i });
         }
-        
+        // carrier pins ride with the carrier group, so place them at their base phase
+        planets.forEach((p, i) => {
+            const phi = (i / set.planets) * TWO_PI;
+            p.pin.position.set(0, Math.sin(phi) * set.orbit, -Math.cos(phi) * set.orbit);
+        });
+        return { set, sun, ring, carrier, planets };
+    });
