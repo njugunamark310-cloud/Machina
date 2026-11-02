@@ -7,87 +7,54 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
-// ================= Gearbox simulation (physics) =================
-// MACHINA Gearbox Lab: simulation core (no Three.js, no DOM).
-// Kept separate so the AWD, air-suspension and hybrid modules can reuse it,
-// and so it can be unit-tested in Node.
+// ================= Automatic transmission simulation (no Three.js, no DOM) =================
+// 8-speed torque-converter automatic. Three planetary sets and five shift
+// elements (A to E) in a simplified, illustrative layout. Every shift swaps
+// exactly one element (clutch-to-clutch), which is what makes it quick.
 
-const MODULE = 0.015;               // pitch radius per tooth (scene units)
-const AXIS_Y = { main: 0.45, counter: -0.45 };
-const CENTER_DISTANCE = AXIS_Y.main - AXIS_Y.counter; // 0.9 = 60 teeth * MODULE
-
-const pitchRadius = (teeth) => teeth * MODULE;
-
-// Constant-mesh layout: input shaft and output shaft are coaxial (top),
-// the countershaft is below. Forward pairs always total 60 teeth so they mesh.
-const INPUT_PAIR = { input: 24, counter: 36 };
+const MODULE = 0.011;                       // pitch radius per tooth (scene units)
+const TWO_PI = Math.PI * 2;
 
 const GEARS = [
-    { gear: -1, label: "R", main: 32, counter: 18, x: -1.05 },
-    { gear: 1, label: "1", main: 42, counter: 18, x: -0.77 },
-    { gear: 2, label: "2", main: 36, counter: 24, x: -0.49 },
-    { gear: 3, label: "3", main: 30, counter: 30, x: -0.21 },
-    { gear: 4, label: "4", main: 27, counter: 33, x: 0.07 },
-    { gear: 5, label: "5", main: 24, counter: 36, x: 0.35 },
-    { gear: 6, label: "6", main: 21, counter: 39, x: 0.63 }
+    { gear: -1, label: "R", ratio: 3.32, elements: "ACD" },
+    { gear: 1, label: "1", ratio: 4.71, elements: "ABC" },
+    { gear: 2, label: "2", ratio: 3.14, elements: "ABD" },
+    { gear: 3, label: "3", ratio: 2.11, elements: "ABE" },
+    { gear: 4, label: "4", ratio: 1.67, elements: "ADE" },
+    { gear: 5, label: "5", ratio: 1.29, elements: "CDE" },
+    { gear: 6, label: "6", ratio: 1.00, elements: "BDE" },
+    { gear: 7, label: "7", ratio: 0.84, elements: "BCE" },
+    { gear: 8, label: "8", ratio: 0.67, elements: "BCD" }
 ];
+const ELEMENTS = ["A", "B", "C", "D", "E"];
+const TOP_GEAR = 8;
 
-// Reverse needs an idler gear so the output turns the other way.
-function idlerPosition(mainTeeth, counterTeeth, idlerTeeth) {
-    const dm = (mainTeeth + idlerTeeth) * MODULE;
-    const dc = (counterTeeth + idlerTeeth) * MODULE;
-    const D = CENTER_DISTANCE;
-    const a = (dc * dc - dm * dm + D * D) / (2 * D);
-    return { y: AXIS_Y.counter + a, z: Math.sqrt(dc * dc - a * a) };
-}
-
-const REV = GEARS[0];
-const REVERSE_IDLER = {
-    teeth: 24,
-    x: REV.x,
-    ...idlerPosition(REV.main, REV.counter, 24)
-};
-
-// Synchro sleeves: [x position, gears it selects as [negative stroke, positive stroke]]
-const SLEEVES = [
-    { x: -0.91, name: "R", gears: [-1, null] },
-    { x: -0.63, name: "1/2", gears: [1, 2] },
-    { x: -0.07, name: "3/4", gears: [3, 4] },
-    { x: 0.49, name: "5/6", gears: [5, 6] }
-];
-const SLEEVE_STROKE = 0.14;
-
-const FINAL_DRIVE = 4.1;
+const FINAL_DRIVE = 3.15;
 const WHEEL_RADIUS = 0.33;
-const IDLE_RPM = 850;
+const IDLE_RPM = 800;
 const REDLINE = 7000;
 const MASS = 1600;
 const ROLLING_N = 171;
 const DRAG_K = 0.409;
 const BRAKE_N = 14000;
-const CLUTCH_CAPACITY = 400;
+const ENGINE_INERTIA = 0.28;                // kg m^2 (flywheel + converter pump)
+const CONVERTER_K = 30;                     // pump capacity factor
+const STALL_MULT = 1.9;                     // torque multiplication at stall
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const approach = (current, target, rate, dt) =>
     current + (target - current) * (1 - Math.exp(-rate * dt));
+const smooth = (x) => { const t = clamp(x, 0, 1); return t * t * (3 - 2 * t); };
 
+const gearEntry = (g) => GEARS.find((e) => e.gear === g);
+const gearRatio = (g) => (g === 0 ? 0 : gearEntry(g).ratio);
 const GEAR_LABEL = (g) => (g === -1 ? "R" : g === 0 ? "N" : String(g));
-
-// Overall ratio magnitude between engine and the output shaft (not incl. final drive)
-function gearRatio(gear) {
-    if (gear === 0) return 0;
-    const g = GEARS.find((entry) => entry.gear === gear);
-    return (INPUT_PAIR.counter / INPUT_PAIR.input) * (g.main / g.counter);
-}
-
-function ordinal(g) {
-    return g === 1 ? "1st" : g === 2 ? "2nd" : g === 3 ? "3rd" : `${g}th`;
-}
+const ordinal = (g) => (g === 1 ? "1st" : g === 2 ? "2nd" : g === 3 ? "3rd" : `${g}th`);
 
 // ---- Engine torque (illustrative turbo four) -------------------------------
 const TORQUE_POINTS = [
-    [0, 80], [800, 110], [1500, 170], [2500, 230],
-    [4500, 250], [6000, 225], [7000, 170], [9000, 100]
+    [0, 80], [800, 120], [1500, 190], [2500, 250],
+    [4500, 270], [6000, 240], [7000, 180], [9000, 100]
 ];
 
 function torqueCurve(rpm) {
@@ -101,306 +68,320 @@ function torqueCurve(rpm) {
     return TORQUE_POINTS[TORQUE_POINTS.length - 1][1];
 }
 
-// ---- Gear-mesh geometry -----------------------------------------------------
-// Angle of a gear B that meshes with gear A. phi = direction from A's centre to
-// B's centre (in the gears' own plane). Keeps teeth interleaved at all times.
-function meshPartner(thetaA, teethA, teethB, phi) {
-    return -(teethA / teethB) * (thetaA - phi) + phi + Math.PI - Math.PI / teethB;
-}
+// ---- Planetary gear geometry -------------------------------------------------
+// Three sets in series. Ns + Nr = Ns + (Ns + 2 Np), so the ring has Ns + 2 Np teeth.
+const PLANETARY_SETS = [
+    { name: "Set 1", sun: 28, planet: 16, planets: 4, x: -0.62 },
+    { name: "Set 2", sun: 32, planet: 14, planets: 4, x: 0.14 },
+    { name: "Set 3", sun: 36, planet: 12, planets: 4, x: 0.82 }
+].map((s) => ({ ...s, ring: s.sun + 2 * s.planet, orbit: (s.sun + s.planet) * MODULE }));
+
+// Sun speed multiple of the turbine for each set. The carriers all ride on the
+// output, so a lower gear (bigger ratio) makes suns spin much faster than carriers.
+const SUN_SPEED = [1.0, 0.62, 0.38];
 
 const wrapCentered = (x, period) =>
     ((((x + period / 2) % period) + period) % period) - period / 2;
 
-// 0 when the teeth are perfectly interleaved. Used by tests.
-function meshError(thetaA, teethA, thetaB, teethB, phi) {
-    const rA = teethA * MODULE;
-    const rB = teethB * MODULE;
-    const deltaA = wrapCentered(phi - thetaA, (2 * Math.PI) / teethA);
-    const deltaB = wrapCentered(phi + Math.PI - thetaB - Math.PI / teethB, (2 * Math.PI) / teethB);
-    const sA = -rA * deltaA;
-    const sB = -rB * deltaB;
-    return wrapCentered(sA + sB, 2 * Math.PI * MODULE);
+// External mesh: angle of gear B meshing gear A. phi is the direction from A to B.
+function meshPartner(thetaA, teethA, teethB, phi) {
+    return -(teethA / teethB) * (thetaA - phi) + phi + Math.PI - Math.PI / teethB;
 }
 
-// Local gear-plane coords are (-worldZ, worldY).
-const dirAngle = (from, to) => Math.atan2(to.y - from.y, -(to.z - from.z));
+// Internal ring angle that meshes with a planet. delta* are tooth-centre offsets
+// from the contact direction; the ring must have a tooth where the planet has a gap.
+function ringAngle(thetaPlanet, planetTeeth, ringTeeth, phi) {
+    const dp = wrapCentered(phi - thetaPlanet, TWO_PI / planetTeeth);
+    const rp = planetTeeth * MODULE;
+    const rr = ringTeeth * MODULE;
+    const pitch = TWO_PI * MODULE;
+    const dr = wrapCentered((rp * dp + pitch / 2) / rr, TWO_PI / ringTeeth);
+    return phi - dr;
+}
 
-const COUNTER_POS = { y: AXIS_Y.counter, z: 0 };
-const MAIN_POS = { y: AXIS_Y.main, z: 0 };
-const PHI = {
-    inputToCounter: -Math.PI / 2,
-    counterToMain: Math.PI / 2,
-    counterToIdler: dirAngle(COUNTER_POS, REVERSE_IDLER),
-    idlerToMain: dirAngle(REVERSE_IDLER, MAIN_POS)
-};
-
-// Everything downstream of the input gear angle is geometry, so every pair meshes.
-function computeGearAngles(thetaIn) {
-    const counter = meshPartner(thetaIn, INPUT_PAIR.input, INPUT_PAIR.counter, PHI.inputToCounter);
-    const mains = {};
-
-    for (const g of GEARS) {
-        if (g.gear > 0) mains[g.gear] = meshPartner(counter, g.counter, g.main, PHI.counterToMain);
+// Everything is derived from the sun and carrier angle, so teeth never clash.
+function planetaryAngles(set, thetaSun, thetaCarrier) {
+    const planets = [];
+    let ring = 0;
+    for (let i = 0; i < set.planets; i++) {
+        const phi = thetaCarrier + (i / set.planets) * TWO_PI;
+        const spin = meshPartner(thetaSun, set.sun, set.planet, phi);
+        planets.push({ phi, spin });
+        if (i === 0) ring = ringAngle(spin, set.planet, set.ring, phi);
     }
-
-    const idler = meshPartner(counter, REV.counter, REVERSE_IDLER.teeth, PHI.counterToIdler);
-    mains[-1] = meshPartner(idler, REVERSE_IDLER.teeth, REV.main, PHI.idlerToMain);
-
-    return { counter, idler, mains };
+    return { planets, ring };
 }
 
-// ---- Drivetrain state -------------------------------------------------------
+// ---- Shift schedule -------------------------------------------------------------
+// Upshift rpm and kickdown depend on throttle; sport mode holds gears longer.
+function upshiftRpm(throttle, sport) {
+    const base = sport ? 4300 : 2300;
+    const span = sport ? 2300 : 3000;
+    return base + clamp(throttle, 0, 1) * span;
+}
+function downshiftRpm(throttle, sport) {
+    return (sport ? 2600 : 1300) + clamp(throttle, 0, 1) * (sport ? 1900 : 1700);
+}
+
+// ---- Drivetrain state -----------------------------------------------------------
 function createDrivetrain() {
     return {
-        gear: 0,            // gear actually locked in by a sleeve
-        targetGear: 0,      // gear the shifter is moving to
-        sleeves: [0, 0, 0, 0],
-        sleeveVel: [0, 0, 0, 0],
-        speed: 0,           // m/s, signed
+        selector: "P",       // P R N D S M
+        gear: 0,             // gear currently carrying torque (signed, 0 = none)
+        targetGear: 0,
+        fromGear: 0,
+        shift: 0,            // 0..1 progress of the active shift (0 = none)
+        shifting: false,
+        shiftTimer: 0,
+        shiftTime: 0.16,
+        shiftSeq: 0,         // increments on every shift, for sound and UI
+        shiftKind: "",       // "UP" | "DOWN"
+        holdTimer: 0,        // blocks a second shift right after the first
+        manualGear: 1,
+        elements: { A: 0, B: 0, C: 0, D: 0, E: 0 },
+        speed: 0,
         rpm: IDLE_RPM,
-        rpmFree: IDLE_RPM,
-        pedal: 0,
+        omega: (IDLE_RPM * TWO_PI) / 60,
+        turbineRpm: 0,
         throttle: 0,
+        throttleRate: 0,
         brake: 0,
         running: true,
-        coupling: 1,        // 0 = clutch fully open, 1 = fully locked
+        lockup: 0,           // 0 = converter open, 1 = locked
+        slip: 0,
+        torqueMult: 1,
         inputRpm: 0,
-        outputRpm: 0,       // signed, output shaft
+        outputRpm: 0,
         engineTorque: 0,
         wheelTorque: 0,
         speedKmh: 0,
         overRev: false,
+        ratioNow: 0,
         message: "",
         messageTimer: 0
     };
 }
 
-function sleeveTargetFor(gear) {
-    for (let i = 0; i < SLEEVES.length; i++) {
-        const idx = SLEEVES[i].gears.indexOf(gear);
-        if (gear !== 0 && idx !== -1) return { sleeve: i, offset: idx === 0 ? -SLEEVE_STROKE : SLEEVE_STROKE };
-    }
-    return null;
-}
+function say(s, text, time = 2) { s.message = text; s.messageTimer = time; }
 
-function engagedGear(sleeves) {
-    for (let i = 0; i < SLEEVES.length; i++) {
-        const o = sleeves[i];
-        if (Math.abs(o) >= SLEEVE_STROKE * 0.9) {
-            const g = SLEEVES[i].gears[o < 0 ? 0 : 1];
-            if (g !== null) return g;
-        }
-    }
-    return 0;
-}
+function requestSelector(s, sel) {
+    if (sel === s.selector) return { ok: true };
+    const moving = Math.abs(s.speed) > 1.2;
 
-function requestGear(s, gear) {
-    if (gear === s.targetGear) return { ok: true };
+    if ((sel === "P") && moving) { say(s, "PARK BLOCKED: STILL MOVING"); return { ok: false }; }
+    if (sel === "R" && s.speed > 1.2) { say(s, "REVERSE BLOCKED: STOP FIRST"); return { ok: false }; }
+    if ((sel === "D" || sel === "S" || sel === "M") && s.speed < -1.2) { say(s, "DRIVE BLOCKED: STOP FIRST"); return { ok: false }; }
 
-    // Selecting a gear while the clutch is engaged would grind the dogs.
-    if (gear !== 0 && s.pedal < 0.75) {
-        s.message = "GEAR GRIND: PRESS THE CLUTCH FIRST";
-        s.messageTimer = 2.2;
-        return { ok: false, reason: "clutch" };
-    }
-
-    s.targetGear = gear;
+    s.selector = sel;
+    if (sel === "R") startShift(s, -1);
+    else if (sel === "P" || sel === "N") startShift(s, 0);
+    else if (sel === "M") s.manualGear = clamp(s.gear > 0 ? s.gear : 1, 1, TOP_GEAR);
+    else if (s.gear <= 0) startShift(s, 1);
     return { ok: true };
 }
 
-// Spring-loaded sleeves: a stiff, slightly under-damped spring gives a quick
-// stroke (~60 ms) with a tiny overshoot, which reads as a crisp "click".
-const SLEEVE_K = 2600;   // spring stiffness
-const SLEEVE_C = 62;     // damping
+// Paddle shift (manual mode)
+function paddleShift(s, delta) {
+    if (s.selector !== "M" && (s.selector === "D" || s.selector === "S")) {
+        s.selector = "M";
+        s.manualGear = clamp(s.gear > 0 ? s.gear : 1, 1, TOP_GEAR);
+    }
+    if (s.selector !== "M") return;
+    s.manualGear = clamp(s.manualGear + delta, 1, TOP_GEAR);
+}
 
-function updateSleeves(s, dt) {
-    const wanted = sleeveTargetFor(s.targetGear);
-    const steps = Math.max(1, Math.ceil(dt / 0.004));
-    const h = dt / steps;
+function startShift(s, target) {
+    if (target === s.targetGear && !s.shifting) return;
+    s.fromGear = s.gear;
+    s.targetGear = target;
+    s.shifting = true;
+    s.shift = 0;
+    s.shiftTimer = 0;
+    s.shiftSeq += 1;
+    const toward = Math.abs(target);
+    const away = Math.abs(s.fromGear);
+    s.shiftKind = target === 0 || toward < away ? "DOWN" : "UP";
+    // Snappy: sport and kickdown shifts are the quickest; garage shifts are gentler.
+    const garage = target <= 0 || s.fromGear <= 0 || (target < 0 && s.fromGear > 0);
+    s.shiftTime = garage ? 0.45 : s.selector === "S" || s.selector === "M" ? 0.11 : s.throttle > 0.7 ? 0.12 : 0.17;
+}
 
-    for (let i = 0; i < SLEEVES.length; i++) {
-        let target = 0;
+function updateElements(s, dt) {
+    const target = (g) => (g === 0 ? "" : gearEntry(g).elements);
+    const from = target(s.fromGear);
+    const to = target(s.shifting ? s.targetGear : s.gear);
+    for (const e of ELEMENTS) {
+        const was = from.includes(e);
+        const will = to.includes(e);
+        let value = was && will ? 1 : will ? s.shift : was ? 1 - s.shift : 0;
+        if (!s.shifting) value = will ? 1 : 0;
+        s.elements[e] = value;
+    }
+}
 
-        if (wanted && wanted.sleeve === i) {
-            // Only start engaging once every other sleeve is back in neutral.
-            const othersClear = s.sleeves.every((o, j) => j === i || Math.abs(o) < 0.02);
-            if (othersClear) target = wanted.offset;
+function chooseGear(s, dt) {
+    if (s.holdTimer > 0) s.holdTimer -= dt;
+    if (s.shifting || s.holdTimer > 0) return;
+    const g = s.gear;
+
+    if (s.selector === "D" || s.selector === "S") {
+        if (g <= 0) { startShift(s, 1); return; }
+        const sport = s.selector === "S";
+        const kickdown = s.throttle > 0.92 && s.throttleRate > 1.2;
+        const wheelRpm = (Math.abs(s.speed) / (TWO_PI * WHEEL_RADIUS)) * 60;
+        const rpmIn = (n) => wheelRpm * FINAL_DRIVE * gearRatio(n);
+
+        if (g < TOP_GEAR && rpmIn(g) > upshiftRpm(s.throttle, sport) && rpmIn(g + 1) > 1200) {
+            startShift(s, g + 1);
+        } else if (g > 1 && (rpmIn(g) < downshiftRpm(s.throttle, sport) || (kickdown && rpmIn(g - 1) < 6200 && s.rpm < 4500 && g > 2))) {
+            startShift(s, kickdown && rpmIn(g - 2) < 5800 && g > 3 ? g - 2 : g - 1);
         }
-
-        for (let k = 0; k < steps; k++) {
-            const acc = SLEEVE_K * (target - s.sleeves[i]) - SLEEVE_C * s.sleeveVel[i];
-            s.sleeveVel[i] += acc * h;
-            s.sleeves[i] += s.sleeveVel[i] * h;
-        }
-
-        if (Math.abs(s.sleeves[i] - target) < 0.0015 && Math.abs(s.sleeveVel[i]) < 0.05) {
-            s.sleeves[i] = target;
-            s.sleeveVel[i] = 0;
-        }
+    } else if (s.selector === "M") {
+        if (g > 0 && s.manualGear !== g) startShift(s, s.manualGear);
+        else if (g <= 0) startShift(s, s.manualGear);
+        // auto upshift just before the limiter, auto downshift to stop stalling
+        const wheelRpm = (Math.abs(s.speed) / (TWO_PI * WHEEL_RADIUS)) * 60;
+        if (g > 1 && wheelRpm * FINAL_DRIVE * gearRatio(g) < 1000) s.manualGear = g - 1;
+        if (g > 0 && g < TOP_GEAR && s.rpm > REDLINE - 60 && s.throttle > 0.5) s.manualGear = g + 1;
     }
 }
 
 function stepDrivetrain(s, dt, ctrl) {
-    // ctrl.running = false means the engine is off: no torque, and the crank only
-    // turns if the wheels drag it round through an engaged gear.
     const running = ctrl.running !== false;
-    const idle = running ? IDLE_RPM : 0;
     s.running = running;
+    const prevThrottle = s.throttle;
     s.throttle = running ? clamp(ctrl.throttle, 0, 1) : 0;
-    s.pedal = clamp(ctrl.pedal, 0, 1);
+    s.throttleRate = approach(s.throttleRate, (s.throttle - prevThrottle) / Math.max(dt, 1e-4), 12, dt);
     s.brake = clamp(ctrl.brake, 0, 1);
 
-    if (s.messageTimer > 0) {
-        s.messageTimer -= dt;
-        if (s.messageTimer <= 0) s.message = "";
+    if (s.messageTimer > 0) { s.messageTimer -= dt; if (s.messageTimer <= 0) s.message = ""; }
+
+    chooseGear(s, dt);
+
+    // Shift progress: fast ramp, ratio blends between the old and new gear
+    if (s.shifting) {
+        s.shiftTimer += dt;
+        s.shift = clamp(s.shiftTimer / s.shiftTime, 0, 1);
+        if (s.shift >= 1) {
+            s.shifting = false;
+            s.gear = s.targetGear;
+            s.fromGear = s.gear;
+            s.shift = 0;
+            s.holdTimer = s.shiftTime > 0.3 ? 0.2 : 0.55;
+        }
+    }
+    updateElements(s, dt);
+
+    const e = smooth(s.shift);
+    const ratioFrom = gearRatio(s.fromGear);
+    const ratioTo = gearRatio(s.targetGear);
+    const ratio = s.shifting ? ratioFrom + (ratioTo - ratioFrom) * e : gearRatio(s.gear);
+    const dirGear = s.shifting ? s.targetGear : s.gear;
+    const dir = dirGear < 0 ? -1 : 1;
+    s.ratioNow = ratio;
+
+    const overall = ratio * FINAL_DRIVE;
+    const engaged = ratio > 0 && s.selector !== "P" && s.selector !== "N";
+
+    // Torque converter lock-up: closes in higher gears at steady cruise, opens
+    // under hard acceleration in low gear, and while shifting.
+    const wantLock = engaged && s.gear >= 3 && !s.shifting && (s.throttle < 0.85 || s.gear >= 5) && s.speed > 6 && s.rpm > 1400;
+    s.lockup = approach(s.lockup, wantLock ? 1 : 0, wantLock ? 5 : 14, dt);
+
+    // Shift torque cut: a brief ignition retard mid-shift gives the sharp feel
+    const torqueCut = s.shifting && s.shiftKind === "UP" ? 1 - 0.55 * Math.sin(Math.PI * e) : 1;
+
+    const steps = 8;
+    const h = dt / steps;
+    let turbineTorque = 0;
+    let slipRpm = 0;
+
+    for (let i = 0; i < steps; i++) {
+        const rpm = (s.omega * 60) / TWO_PI;
+        const wheelRpm = (s.speed / (TWO_PI * WHEEL_RADIUS)) * 60;
+        const turbine = engaged ? Math.abs(wheelRpm) * overall : 0;
+        const sr = rpm > 50 ? clamp(turbine / rpm, 0, 1.2) : 0;
+        const slipFrac = 1 - sr;
+
+        // fluid coupling torque (stall at sr=0, falls to zero as sr -> 1)
+        const kfac = clamp(slipFrac * 5, -1, 1);
+        const pump = CONVERTER_K * (rpm / 1000) * (rpm / 1000) * kfac;
+        const mult = 1 + (STALL_MULT - 1) * clamp(1 - sr / 0.85, 0, 1);
+
+        // locked clutch behaves like a stiff damper
+        const stiff = clamp(3.2 * (rpm - turbine), -650, 650);
+
+        const reactOnEngine = engaged ? (1 - s.lockup) * pump + s.lockup * stiff : 0;
+        const toTurbine = engaged ? (1 - s.lockup) * pump * (pump > 0 ? mult : 1) + s.lockup * stiff : 0;
+
+        // engine torque with limiter, friction and an idle governor
+        const limiter = rpm >= REDLINE ? 0 : 1;
+        const friction = rpm > 1 ? 12 + rpm * 0.011 : 0;
+        const idleHold = running ? clamp((IDLE_RPM - rpm) * 0.55, 0, 140) : 0;
+        const engineTorque = running
+            ? (s.throttle * torqueCurve(rpm) * limiter * torqueCut - friction * (1 - s.throttle) + idleHold)
+            : -friction;
+        s.engineTorque = engineTorque;
+
+        s.omega = Math.max(0, s.omega + ((engineTorque - reactOnEngine) / ENGINE_INERTIA) * h);
+
+        // vehicle
+        const driveForce = engaged ? (dir * toTurbine * overall * 0.93) / WHEEL_RADIUS : 0;
+        const v = s.speed;
+        const parked = s.selector === "P";
+        const holdBrake = parked ? 1e6 : 0;
+        const brakeForce = s.brake * BRAKE_N + holdBrake;
+
+        if (Math.abs(v) < 0.04 && Math.abs(driveForce) <= ROLLING_N + brakeForce) {
+            s.speed = 0;
+        } else {
+            const sign = v !== 0 ? Math.sign(v) : Math.sign(driveForce || 1);
+            const resist = ROLLING_N + DRAG_K * v * v + brakeForce;
+            const next = v + ((driveForce - sign * resist) / MASS) * h;
+            s.speed = v !== 0 && Math.sign(next) !== Math.sign(v) && Math.abs(driveForce) < resist ? 0 : next;
+        }
+
+        turbineTorque = toTurbine;
+        slipRpm = rpm - turbine;
     }
 
-    updateSleeves(s, dt);
-    s.gear = engagedGear(s.sleeves);
-
-    // Clutch bite curve: fully locked up to 25% pedal, fully open at 75%.
-    const x = clamp(1 - (s.pedal - 0.25) / 0.5, 0, 1);
-    s.coupling = x * x * (3 - 2 * x);
-
-    const engaged = s.gear !== 0;
-    const dir = s.gear < 0 ? -1 : 1;
-    const overall = gearRatio(s.gear) * FINAL_DRIVE;
-    const wheelRpm = (s.speed / (2 * Math.PI * WHEEL_RADIUS)) * 60;
-
-    // The wheels drive the engine through the gears when the clutch is closed.
-    const rollingWithGear = engaged && s.speed * dir > -0.3;
-    const coupledRpm = rollingWithGear
-        ? Math.max(idle, Math.abs(wheelRpm) * overall)
-        : idle;
-    const eff = engaged ? s.coupling : 0;
-
-    const freeTarget = running ? IDLE_RPM + s.throttle * (REDLINE - 100 - IDLE_RPM) : 0;
-    s.rpmFree = approach(s.rpmFree, freeTarget, 6, dt);
-    if (eff > 0.999) s.rpmFree = coupledRpm;
-
-    s.rpm = clamp(s.rpmFree * (1 - eff) + coupledRpm * eff, idle, 9000);
+    s.rpm = clamp((s.omega * 60) / TWO_PI, 0, 9000);
     s.overRev = s.rpm > REDLINE + 150;
+    s.slip = engaged ? slipRpm : 0;
+    s.torqueMult = engaged && s.lockup < 0.5 ? 1 + (STALL_MULT - 1) * clamp(1 - (s.turbineRpm / Math.max(s.rpm, 1)) / 0.85, 0, 1) : 1;
 
-    // Engine torque, with a rev limiter and pumping friction when off the throttle.
-    const limiter = s.rpm >= REDLINE ? 0 : 1;
-    const friction = s.rpm > 1 ? 12 + s.rpm * 0.012 : 0;
-    const engineTorque = s.throttle * torqueCurve(s.rpm) * limiter - friction * (1 - s.throttle);
-    s.engineTorque = engineTorque;
-
-    let transmitted = clamp(engineTorque, -CLUTCH_CAPACITY * eff, CLUTCH_CAPACITY * eff);
-    const engineBraking = engaged && s.speed * dir > 0.3;
-    if (!engineBraking) transmitted = Math.max(transmitted, 0);
-
-    const driveForce = engaged
-        ? (dir * transmitted * overall * 0.92) / WHEEL_RADIUS
-        : 0;
-
-    // Vehicle motion
-    const v = s.speed;
-    const brakeForce = s.brake * BRAKE_N;
-
-    if (Math.abs(v) < 0.05 && Math.abs(driveForce) <= ROLLING_N + brakeForce) {
-        s.speed = 0;
-    } else {
-        const sign = v !== 0 ? Math.sign(v) : Math.sign(driveForce || 1);
-        const resist = ROLLING_N + DRAG_K * v * v + brakeForce;
-        const next = v + ((driveForce - sign * resist) / MASS) * dt;
-
-        s.speed = v !== 0 && Math.sign(next) !== Math.sign(v) && Math.abs(driveForce) < resist
-            ? 0
-            : next;
-    }
-
-    s.wheelTorque = driveForce * WHEEL_RADIUS;
+    s.wheelTorque = (dir * turbineTorque * overall * 0.93);
     s.speedKmh = s.speed * 3.6;
-    s.outputRpm = (s.speed / (2 * Math.PI * WHEEL_RADIUS)) * 60 * FINAL_DRIVE;
-
-    // Input shaft: forced by the wheels when a gear is locked, else follows the clutch disc.
-    const inputTarget = engaged
-        ? Math.abs(s.outputRpm) * gearRatio(s.gear)
-        : s.rpm * s.coupling;
-    s.inputRpm = approach(s.inputRpm, inputTarget, 15, dt);
+    s.outputRpm = (s.speed / (TWO_PI * WHEEL_RADIUS)) * 60 * FINAL_DRIVE;
+    s.turbineRpm = engaged ? Math.abs(s.outputRpm) * ratio : 0;
+    s.inputRpm = approach(s.inputRpm, s.turbineRpm, 30, dt);
 
     return s;
 }
 
-// ---- Driver aid: automatic clutch + gear selection --------------------------
-function createAuto() {
-    return { phase: "run", pedal: 0, want: 0, from: 0, timer: 0, t: 0, demo: false };
-}
+// ---- Driver aid: demo drive ----------------------------------------------------
+function createAuto() { return { t: 0, demo: false }; }
 
 function autoDrive(s, a, user, dt) {
     a.t += dt;
     let throttle = user.throttle;
     let brake = user.brake;
-
     if (a.demo) {
-        const c = a.t % 36;
-        if (c < 20) { throttle = 0.9; brake = 0; }
-        else if (c < 30) { throttle = 0; brake = c < 24 ? 0.15 : 0.55; }
-        else { throttle = 0; brake = 0.7; }
+        const c = a.t % 44;
+        if (c < 3) { throttle = 0; brake = 0; if (s.selector !== "D") requestSelector(s, "D"); }
+        else if (c < 24) { throttle = c < 14 ? 0.55 : 1.0; brake = 0; if (c > 14 && s.selector !== "S") requestSelector(s, "S"); }
+        else if (c < 34) { throttle = 0; brake = c < 27 ? 0.1 : 0.5; if (s.selector !== "D") requestSelector(s, "D"); }
+        else { throttle = 0; brake = 0.75; }
     }
-
-    const speed = Math.abs(s.speed);
-    const g = s.targetGear;
-
-    if (a.phase === "run") {
-        a.pedal = 0;
-        let want = g;
-
-        if (g === 0) {
-            if (throttle > 0.05) want = 1;
-        } else if (g > 0) {
-            if (speed < 0.5 && throttle < 0.02) want = 0;
-            else if (s.rpm > 6100 && g < 6 && throttle > 0.3) want = g + 1;
-            else if (s.rpm < 1700 && g > 1 && speed > 1) want = g - 1;
-        }
-
-        if (want !== g) {
-            a.phase = "dip";
-            a.want = want;
-            a.from = g;
-            a.timer = 0;
-        }
-    } else if (a.phase === "dip") {
-        a.pedal = Math.min(1, a.pedal + dt * 16);
-        if (a.pedal >= 0.85) {
-            requestGear(s, a.want);
-            a.phase = "wait";
-            a.timer = 0;
-        }
-    } else if (a.phase === "wait") {
-        a.pedal = 1;
-        a.timer += dt;
-        if (s.gear === a.want || a.timer > 0.7) a.phase = "rise";
-    } else if (a.phase === "rise") {
-        const launch = a.want === 1 || a.want === -1;
-        a.pedal = Math.max(0, a.pedal - dt * (launch ? 2.0 : 9));
-        if (a.want === 0 || a.pedal <= 0.02) {
-            a.pedal = 0;
-            a.phase = "run";
-        }
-    }
-
-    // Shift technique: lift off the throttle on upshifts, blip it on downshifts.
-    if (a.phase === "dip" || a.phase === "wait") {
-        if (a.want > a.from && a.from > 0) throttle = 0;
-        else if (a.want < a.from && a.want > 0) throttle = Math.max(throttle, 0.6);
-    }
-    if (a.phase === "rise" && a.want < a.from && a.want > 0 && a.pedal > 0.2) {
-        throttle = Math.max(throttle, 0.5);
-    }
-
-    return { throttle, brake, pedal: Math.max(a.pedal, user.pedal) };
+    return { throttle, brake };
 }
 
 // ================= Gearbox 3D view and controls =================
 
 const COLORS = { background: "#05080f", cyan: "#00e5ff", orange: "#ff8a00" };
 const SLOW_MOTION = 40;
-const RAD_PER_RPM_SEC = (2 * Math.PI) / 60 / SLOW_MOTION;
-const FLOOR_Y = -1.45;
-const REV_GEAR = GEARS[0];
+const RAD_PER_RPM_SEC = TWO_PI / 60 / SLOW_MOTION;
+const FLOOR_Y = -1.3;
 
 const $ = (selector) => document.querySelector(selector);
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -423,67 +404,70 @@ function init(container) {
         section: $("#gearbox-lab")
     };
 
-    // ---- Renderer / scene -----------------------------------------------------
+    // ---- Renderer / scene (MSAA + bloom for crisp edges and glow) ---------------
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(COLORS.background);
-    scene.fog = new THREE.Fog(COLORS.background, 10, 26);
+    scene.fog = new THREE.Fog(COLORS.background, 11, 28);
 
-    const camera = new THREE.PerspectiveCamera(42, container.clientWidth / container.clientHeight, 0.1, 100);
-    const cameraStart = new THREE.Vector3(2.6, 2.2, 5.6);
-    const targetStart = new THREE.Vector3(-0.5, 0.05, 0);
+    const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+    const cameraStart = new THREE.Vector3(2.9, 1.9, 5.4);
+    const targetStart = new THREE.Vector3(-0.15, 0.0, 0);
     camera.position.copy(cameraStart);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.setAttribute("role", "img");
-    renderer.domElement.setAttribute("aria-label", "Interactive 3D simulation of a six-speed manual gearbox");
+    renderer.domElement.setAttribute("aria-label", "Interactive 3D simulation of an eight-speed automatic transmission");
     renderer.domElement.style.touchAction = "none";
     container.querySelector(".engine-loading, .gb-loading")?.remove();
     container.appendChild(renderer.domElement);
 
-    // Bloom makes the emissive power path, sleeve flashes and hologram lines glow.
-    const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(
-        Math.max(1, container.clientWidth),
-        Math.max(1, container.clientHeight),
+    const composerTarget = new THREE.WebGLRenderTarget(
+        Math.max(1, container.clientWidth), Math.max(1, container.clientHeight),
         { type: THREE.HalfFloatType, samples: 4 }
-    ));
+    );
+    const composer = new EffectComposer(renderer, composerTarget);
     composer.addPass(new RenderPass(scene, camera));
-    composer.addPass(new UnrealBloomPass(
-        new THREE.Vector2(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight)),
-        0.65, 0.7, 0.8
-    ));
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight)), 0.5, 0.6, 0.85
+    );
+    composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     const studio = new RoomEnvironment();
     scene.environment = pmrem.fromScene(studio, 0.04).texture;
-    scene.environmentIntensity = 0.6;
+    scene.environmentIntensity = 0.75;
     studio.dispose?.();
     pmrem.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
     controls.enablePan = false;
-    controls.minDistance = 3;
+    controls.minDistance = 2.5;
     controls.maxDistance = 12;
     controls.maxPolarAngle = Math.PI * 0.52;
     controls.target.copy(targetStart);
 
     scene.add(new THREE.HemisphereLight("#7fdcff", "#1a0f05", 0.5));
-    const key = new THREE.DirectionalLight("#ffffff", 2.2);
+    const key = new THREE.DirectionalLight("#ffffff", 2.4);
     key.position.set(3, 5, 5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
-    Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: 0.5, far: 16 });
-    key.shadow.bias = -0.0004;
+    Object.assign(key.shadow.camera, { left: -5, right: 5, top: 4, bottom: -4, near: 0.5, far: 18 });
+    key.shadow.bias = -0.0003;
     key.shadow.normalBias = 0.02;
     scene.add(key);
+    const rim = new THREE.DirectionalLight("#7fdcff", 1.2);
+    rim.position.set(-4, 2, -4);
+    scene.add(rim);
     const cyanLight = new THREE.PointLight(COLORS.cyan, 18, 10);
     cyanLight.position.set(-4, 1, 2);
     scene.add(cyanLight);
@@ -496,9 +480,10 @@ function init(container) {
     const grid = new THREE.GridHelper(24, 48, COLORS.cyan, "#12384f");
     grid.material.transparent = true;
     grid.material.opacity = 0.35;
+    grid.material.toneMapped = false;
     floor.add(grid);
     const shadowCatcher = new THREE.Mesh(
-        new THREE.PlaneGeometry(14, 14).rotateX(-Math.PI / 2),
+        new THREE.PlaneGeometry(16, 16).rotateX(-Math.PI / 2),
         new THREE.ShadowMaterial({ color: 0x000814, opacity: 0.55 })
     );
     shadowCatcher.position.y = 0.002;
@@ -509,72 +494,91 @@ function init(container) {
     // ---- Materials -------------------------------------------------------------
     const metal = (color, extra = {}) =>
         new THREE.MeshPhysicalMaterial({
-            color, metalness: 0.88, roughness: 0.3, clearcoat: 0.25, clearcoatRoughness: 0.35,
+            color, metalness: 0.9, roughness: 0.3, clearcoat: 0.25, clearcoatRoughness: 0.35,
             emissive: "#000000", ...extra
         });
 
-    const shaftMat = metal("#aab7c4", { roughness: 0.28 });
-    const inputShaftMat = metal("#48c9d8", { roughness: 0.3 });
+    const shaftMat = metal("#c3ced9", { roughness: 0.2 });
+    const inputShaftMat = metal("#48c9d8", { roughness: 0.25 });
     const hubMat = metal("#6f8196");
-    const sleeveMat = metal("#d7e6f5", { roughness: 0.22 });
-    const forkMat = metal("#e87532", { metalness: 0.7, roughness: 0.3 });
-    const railMat = metal("#c4ccd3", { roughness: 0.2 });
     const markMat = new THREE.MeshStandardMaterial({ color: COLORS.orange, emissive: COLORS.orange, emissiveIntensity: 2.5 });
+    const gearColors = { sun: "#2b8fa3", planet: "#7a8ea6", ring: "#4a5d72", carrier: "#8a6a4a" };
 
-    const gearColors = { main: "#5b7088", counter: "#4a5d72", input: "#2b8fa3", idler: "#9a6a44" };
+    // ---- Gear geometry: bevelled, with flank points for a rounder tooth ---------
+    const GEAR_WIDTH = 0.14;
+    const geometryCache = new Map();
 
-    // ---- Gear geometry ----------------------------------------------------------
-    const GEAR_WIDTH = 0.1;
-    const gearGeometryCache = new Map();
-
-    function gearGeometry(teeth) {
-        if (gearGeometryCache.has(teeth)) return gearGeometryCache.get(teeth);
-
-        const pitch = teeth * MODULE;
-        const root = pitch - 0.016;
-        const tip = pitch + 0.012;
-        const step = (Math.PI * 2) / teeth;
-        const shape = new THREE.Shape();
-
-        const addPoint = (angle, radius, first) => {
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
-            if (first) shape.moveTo(x, y);
-            else shape.lineTo(x, y);
-        };
-
+    function toothProfile(shape, teeth, pitch, internal) {
+        const add = internal ? 0.009 : -0.012;      // root offset from pitch circle
+        const tipOffset = internal ? -0.0115 : 0.0095;
+        const root = pitch + add;
+        const tip = pitch + tipOffset;
+        const step = TWO_PI / teeth;
+        const pts = [[-0.34, root], [-0.22, root * 0.5 + tip * 0.5], [-0.14, tip], [0.14, tip], [0.22, root * 0.5 + tip * 0.5], [0.34, root]];
+        const path = shape;
+        let first = true;
         for (let k = 0; k < teeth; k++) {
-            const a = k * step;
-            addPoint(a - 0.3 * step, root, k === 0);
-            addPoint(a - 0.15 * step, tip, false);
-            addPoint(a + 0.15 * step, tip, false);
-            addPoint(a + 0.3 * step, root, false);
-        }
-        shape.closePath();
-
-        const bore = new THREE.Path();
-        bore.absarc(0, 0, 0.078, 0, Math.PI * 2, true);
-        shape.holes.push(bore);
-
-        if (pitch > 0.42) {
-            for (let i = 0; i < 5; i++) {
-                const a = (i / 5) * Math.PI * 2;
-                const hole = new THREE.Path();
-                hole.absarc(Math.cos(a) * pitch * 0.58, Math.sin(a) * pitch * 0.58, pitch * 0.2, 0, Math.PI * 2, true);
-                shape.holes.push(hole);
+            for (const [off, r] of pts) {
+                const a = k * step + off * step;
+                const x = Math.cos(a) * r;
+                const y = Math.sin(a) * r;
+                if (first) { path.moveTo(x, y); first = false; } else path.lineTo(x, y);
             }
         }
+        path.closePath();
+    }
 
-        const geometry = new THREE.ExtrudeGeometry(shape, { depth: GEAR_WIDTH, bevelEnabled: false, curveSegments: 8 });
-        geometry.translate(0, 0, -GEAR_WIDTH / 2);
-        gearGeometryCache.set(teeth, geometry);
+    function extrude(shape, depth) {
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+            depth: depth - 0.01, bevelEnabled: true, bevelThickness: 0.005, bevelSize: 0.003,
+            bevelOffset: -0.003, bevelSegments: 1, curveSegments: 20
+        });
+        geometry.translate(0, 0, -(depth - 0.01) / 2);
+        geometry.computeVertexNormals();
         return geometry;
     }
 
-    // Gear axes run along world X: the pivot turns local Z into world X, so a
-    // rotation about local Z is a rotation about the shaft.
-    function makeGear(teeth, color, position, partKey) {
-        const mesh = new THREE.Mesh(gearGeometry(teeth), metal(color));
+    // external gear (sun / planet)
+    function externalGear(teeth, boreRadius, lightening) {
+        const id = `ext${teeth}-${boreRadius}-${lightening}`;
+        if (geometryCache.has(id)) return geometryCache.get(id);
+        const pitch = teeth * MODULE;
+        const shape = new THREE.Shape();
+        toothProfile(shape, teeth, pitch, false);
+        const bore = new THREE.Path();
+        bore.absarc(0, 0, boreRadius, 0, TWO_PI, true);
+        shape.holes.push(bore);
+        if (lightening) {
+            for (let i = 0; i < 6; i++) {
+                const a = (i / 6) * TWO_PI;
+                const hole = new THREE.Path();
+                hole.absarc(Math.cos(a) * pitch * 0.58, Math.sin(a) * pitch * 0.58, pitch * 0.17, 0, TWO_PI, true);
+                shape.holes.push(hole);
+            }
+        }
+        const geometry = extrude(shape, GEAR_WIDTH);
+        geometryCache.set(id, geometry);
+        return geometry;
+    }
+
+    // internal gear (ring): solid outer band with teeth pointing inward
+    function ringGear(teeth) {
+        const id = `ring${teeth}`;
+        if (geometryCache.has(id)) return geometryCache.get(id);
+        const pitch = teeth * MODULE;
+        const shape = new THREE.Shape();
+        shape.absarc(0, 0, pitch + 0.07, 0, TWO_PI, false);
+        const hole = new THREE.Path();
+        toothProfile(hole, teeth, pitch, true);
+        shape.holes.push(hole);
+        const geometry = extrude(shape, GEAR_WIDTH);
+        geometryCache.set(id, geometry);
+        return geometry;
+    }
+
+    // Gear axes run along world X: the pivot turns local Z into world X.
+    function makeGear(geometry, color, position, partKey) {
+        const mesh = new THREE.Mesh(geometry, metal(color));
         mesh.userData.partKey = partKey;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
@@ -587,223 +591,287 @@ function init(container) {
 
     const pickables = [];
     const addPick = (mesh, key) => { mesh.userData.partKey = key; pickables.push(mesh); return mesh; };
-    const cylinderAlongX = (r1, r2, length, material, key) => {
-        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, length, 28).rotateZ(Math.PI / 2), material);
+    const cylinderAlongX = (r1, r2, length, material, key, segments = 48) => {
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, length, segments).rotateZ(Math.PI / 2), material);
         mesh.castShadow = true;
+        mesh.receiveShadow = true;
         if (key) addPick(mesh, key);
         return mesh;
     };
-
     const root = new THREE.Group();
     scene.add(root);
 
-    // ---- Shafts ------------------------------------------------------------------
+    // ---- Shafts and flywheel / drive plate ---------------------------------------
     const flywheelGroup = new THREE.Group();
-    flywheelGroup.position.set(-2.5, AXIS_Y.main, 0);
-    const flywheel = cylinderAlongX(0.62, 0.62, 0.14, metal("#7c8a98", { roughness: 0.3 }), "flywheel");
+    flywheelGroup.position.set(-2.75, 0, 0);
+    const flywheel = cylinderAlongX(0.66, 0.66, 0.1, metal("#7c8a98", { roughness: 0.28 }), "flywheel", 64);
     flywheelGroup.add(flywheel);
-    const flywheelMark = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.04), markMat);
-    flywheelMark.position.set(0.075, 0.5, 0);
+    const ringGearTeeth = cylinderAlongX(0.68, 0.68, 0.05, metal("#5f6d7b", { roughness: 0.4 }), null, 96);
+    ringGearTeeth.position.x = 0.0;
+    flywheelGroup.add(ringGearTeeth);
+    const flywheelMark = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.05), markMat);
+    flywheelMark.position.set(0.055, 0.5, 0);
     flywheelGroup.add(flywheelMark);
     root.add(flywheelGroup);
 
+    // Input shaft (turbine -> sun gears)
     const inputGroup = new THREE.Group();
-    inputGroup.position.set(0, AXIS_Y.main, 0);
-    const inputShaft = cylinderAlongX(0.065, 0.065, 1.2, inputShaftMat, "input-shaft");
-    inputShaft.position.x = -1.9;
+    const inputShaft = cylinderAlongX(0.07, 0.07, 3.7, inputShaftMat, "input-shaft", 32);
+    inputShaft.position.x = -0.35;
     inputGroup.add(inputShaft);
-    const clutchDisc = cylinderAlongX(0.5, 0.5, 0.05, metal("#8a5a3a", { metalness: 0.3, roughness: 0.7 }), "clutch-disc");
-    clutchDisc.position.x = -2.36;
-    inputGroup.add(clutchDisc);
-    const clutchMark = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.04), markMat);
-    clutchMark.position.set(-2.36, 0.4, 0);
-    inputGroup.add(clutchMark);
-    const inputMark = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.03, 0.03), markMat);
-    inputMark.position.set(-1.65, 0.07, 0);
+    const inputMark = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.035, 0.035), markMat);
+    inputMark.position.set(-1.25, 0.075, 0);
     inputGroup.add(inputMark);
     root.add(inputGroup);
 
-    const pressurePlate = cylinderAlongX(0.52, 0.52, 0.07, metal("#9aabbc", { roughness: 0.3 }), "pressure-plate");
-    pressurePlate.position.set(-2.26, AXIS_Y.main, 0);
-    root.add(pressurePlate);
-
+    // Output shaft (carriers -> driveshaft)
     const outputGroup = new THREE.Group();
-    outputGroup.position.set(0, AXIS_Y.main, 0);
-    const outputShaft = cylinderAlongX(0.06, 0.06, 2.75, shaftMat, "output-shaft");
-    outputShaft.position.x = 0.075;
+    const outputShaft = cylinderAlongX(0.095, 0.095, 0.95, shaftMat, "output-shaft", 32);
+    outputShaft.position.x = 1.85;
     outputGroup.add(outputShaft);
-    const outputMark = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.03), markMat);
-    outputMark.position.set(1.0, 0.065, 0);
-    outputGroup.add(outputMark);
-
-    const flange = cylinderAlongX(0.28, 0.28, 0.08, metal("#8c9ba8", { roughness: 0.3 }), "flange");
-    flange.position.x = 1.5;
+    const flange = cylinderAlongX(0.3, 0.3, 0.08, metal("#8c9ba8", { roughness: 0.25 }), "flange", 64);
+    flange.position.x = 2.25;
     outputGroup.add(flange);
-    const flangeMark = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), markMat);
-    flangeMark.position.set(1.55, 0.2, 0);
+    for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TWO_PI;
+        const bolt = cylinderAlongX(0.026, 0.026, 0.1, metal("#d7e6f5", { roughness: 0.2 }), null, 12);
+        bolt.position.set(2.25, Math.cos(a) * 0.22, Math.sin(a) * 0.22);
+        outputGroup.add(bolt);
+    }
+    const flangeMark = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.09, 0.04), markMat);
+    flangeMark.position.set(2.3, 0.24, 0);
     outputGroup.add(flangeMark);
-
-    const sleeveMeshes = [];
-    SLEEVES.forEach((def, i) => {
-        const hub = cylinderAlongX(0.115, 0.115, 0.1, hubMat);
-        hub.position.x = def.x;
-        outputGroup.add(hub);
-
-        const sleeve = cylinderAlongX(0.16, 0.16, 0.1, metal("#d7e6f5", { roughness: 0.22 }), `sleeve-${i}`);
-        sleeve.position.x = def.x;
-        const groove = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.012, 8, 32).rotateY(Math.PI / 2), hubMat);
-        sleeve.add(groove);
-        outputGroup.add(sleeve);
-        sleeveMeshes.push(sleeve);
-    });
     root.add(outputGroup);
 
-    const counterGroup = new THREE.Group();
-    counterGroup.position.set(0, AXIS_Y.counter, 0);
-    const counterShaft = cylinderAlongX(0.07, 0.07, 2.45, metal("#8c9ba8", { roughness: 0.3 }), "countershaft");
-    counterShaft.position.x = -0.375;
-    counterGroup.add(counterShaft);
-    const counterMark = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.03, 0.03), markMat);
-    counterMark.position.set(0.75, 0.075, 0);
-    counterGroup.add(counterMark);
-    root.add(counterGroup);
+    // ---- Torque converter -----------------------------------------------------------
+    const converter = new THREE.Group();
+    converter.position.set(-2.1, 0, 0);
+    root.add(converter);
 
-    // ---- Gears ---------------------------------------------------------------------
-    const gearParts = { mains: {}, counters: {}, input: null, counterInput: null, idler: null };
-
-    // input pair
-    {
-        const input = makeGear(INPUT_PAIR.input, gearColors.input, new THREE.Vector3(-1.45, AXIS_Y.main, 0), "input-gear");
-        pickables.push(input.mesh);
-        root.add(input.pivot);
-        gearParts.input = input;
-
-        const counterInput = makeGear(INPUT_PAIR.counter, gearColors.input, new THREE.Vector3(-1.45, 0, 0), "counter-input-gear");
-        pickables.push(counterInput.mesh);
-        counterGroup.add(counterInput.pivot);
-        gearParts.counterInput = counterInput;
+    // translucent cover shell (lathe profile of a flattened doughnut)
+    const shellPts = [];
+    for (let i = 0; i <= 40; i++) {
+        const t = (i / 40) * TWO_PI;            // full ellipse in the (radius, axial) plane
+        shellPts.push(new THREE.Vector2(0.43 + Math.cos(t) * 0.27, Math.sin(t) * 0.23));
     }
+    const shell = new THREE.Mesh(
+        new THREE.LatheGeometry(shellPts, 96).rotateZ(Math.PI / 2),
+        new THREE.MeshPhysicalMaterial({
+            color: "#4a5f77", metalness: 0.7, roughness: 0.25, transparent: true, opacity: 0.22,
+            side: THREE.DoubleSide, depthWrite: false
+        })
+    );
+    addPick(shell, "converter");
+    converter.add(shell);
 
-    for (const g of GEARS) {
-        const main = makeGear(g.main, gearColors.main, new THREE.Vector3(g.x, AXIS_Y.main, 0), `main-${g.gear}`);
-        pickables.push(main.mesh);
-        root.add(main.pivot);
-        gearParts.mains[g.gear] = main;
+    const impeller = new THREE.Group();   // spins with the engine
+    const turbineGroup = new THREE.Group(); // spins with the input shaft
+    const stator = new THREE.Group();     // locked by the one-way clutch
+    converter.add(impeller, turbineGroup, stator);
 
-        // counter gears are fixed to the countershaft, so they ride inside its group
-        const counter = makeGear(g.counter, gearColors.counter, new THREE.Vector3(g.x, 0, 0), `counter-${g.gear}`);
-        pickables.push(counter.mesh);
-        counterGroup.add(counter.pivot);
-        gearParts.counters[g.gear] = counter;
-    }
+    const bladeMat = {
+        impeller: metal("#e87532", { roughness: 0.3 }),
+        turbine: metal("#48c9d8", { roughness: 0.3 }),
+        stator: metal("#c4ccd3", { roughness: 0.25 })
+    };
+    const bladeGeo = new THREE.BoxGeometry(0.2, 0.2, 0.012);
+    const placeBlades = (group, material, x, tilt, count, key) => {
+        for (let i = 0; i < count; i++) {
+            const a = (i / count) * TWO_PI;
+            const blade = new THREE.Mesh(bladeGeo, material);
+            blade.position.set(x, Math.cos(a) * 0.43, Math.sin(a) * 0.43);
+            blade.rotation.set(a + Math.PI / 2, tilt, 0, "XYZ");
+            blade.castShadow = true;
+            addPick(blade, key);
+            group.add(blade);
+        }
+    };
+    placeBlades(impeller, bladeMat.impeller, -0.12, 0.45, 30, "impeller");
+    placeBlades(turbineGroup, bladeMat.turbine, 0.12, -0.45, 30, "turbine");
+    placeBlades(stator, bladeMat.stator, 0, 0.0, 16, "stator-blades");
 
-    {
-        const idler = makeGear(
-            REVERSE_IDLER.teeth, gearColors.idler,
-            new THREE.Vector3(REVERSE_IDLER.x, REVERSE_IDLER.y, REVERSE_IDLER.z), "idler"
-        );
-        pickables.push(idler.mesh);
-        root.add(idler.pivot);
-        gearParts.idler = idler;
+    // lock-up clutch piston slides toward the cover when the converter locks
+    const lockPiston = cylinderAlongX(0.34, 0.34, 0.03, metal("#9a6a3a", { metalness: 0.4, roughness: 0.6 }), "lockup", 48);
+    lockPiston.position.x = 0.22;
+    turbineGroup.add(lockPiston);
+    const lockGlow = new THREE.Mesh(
+        new THREE.TorusGeometry(0.34, 0.012, 8, 64).rotateY(Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: "#00e5ff", emissive: "#00e5ff", emissiveIntensity: 0, toneMapped: false })
+    );
+    lockGlow.position.x = 0.22;
+    converter.add(lockGlow);
 
-        const pin = cylinderAlongX(0.035, 0.035, 0.3, shaftMat, "idler");
-        pin.position.set(REVERSE_IDLER.x, REVERSE_IDLER.y, REVERSE_IDLER.z);
-        root.add(pin);
-    }
+    const hub = cylinderAlongX(0.12, 0.12, 0.62, metal("#8c9ba8", { roughness: 0.25 }), null, 32);
+    hub.position.x = 0.05;
+    converter.add(hub);
 
-    // ---- Shift forks and rails --------------------------------------------------------
-    const forks = SLEEVES.map((def, i) => {
-        const group = new THREE.Group();
-        const railZ = i % 2 === 0 ? -0.15 : 0.15;
-        const railY = 1.12;
+    // ---- Planetary sets ------------------------------------------------------------------
+    const planetary = PLANETARY_SETS.map((set, index) => {
+        const sun = makeGear(externalGear(set.sun, 0.075, false), gearColors.sun, new THREE.Vector3(set.x, 0, 0), `sun-${index}`);
+        pickables.push(sun.mesh);
+        root.add(sun.pivot);
 
-        const arc = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.02, 8, 24, Math.PI).rotateY(Math.PI / 2), forkMat);
-        arc.position.y = AXIS_Y.main;
-        const stem = new THREE.Mesh(new THREE.BoxGeometry(0.035, railY - AXIS_Y.main - 0.19, 0.035), forkMat);
-        stem.position.y = (railY + AXIS_Y.main + 0.19) / 2;
-        const link = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, Math.abs(railZ)), forkMat);
-        link.position.set(0, railY, railZ / 2);
-        const collar = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), forkMat);
-        collar.position.set(0, railY, railZ);
-        group.add(arc, stem, link, collar);
-        group.position.x = def.x;
-        group.traverse((m) => { if (m.isMesh) m.castShadow = true; });
-        addPick(arc, "fork");
-        root.add(group);
+        const ring = makeGear(ringGear(set.ring), gearColors.ring, new THREE.Vector3(set.x, 0, 0), `ring-${index}`);
+        pickables.push(ring.mesh);
+        root.add(ring.pivot);
 
-        const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.5, 12).rotateZ(Math.PI / 2), railMat);
-        rail.position.set(def.x, railY, railZ);
-        root.add(rail);
-        return group;
+        const carrier = new THREE.Group();
+        carrier.position.set(set.x, 0, 0);
+        root.add(carrier);
+
+        const plateMat = metal(gearColors.carrier, { roughness: 0.35 });
+        for (const side of [-1, 1]) {
+            const plate = cylinderAlongX(set.orbit + 0.06, set.orbit + 0.06, 0.016, plateMat, side === -1 ? `carrier-${index}` : null, 64);
+            plate.position.x = side * 0.095;
+            // keep the plate clear: cut-out look via a darker inner disc
+            carrier.add(plate);
+            const hubDisc = cylinderAlongX(0.1, 0.1, 0.03, shaftMat, null, 32);
+            hubDisc.position.x = side * 0.095;
+            carrier.add(hubDisc);
+        }
+        const planets = [];
+        for (let i = 0; i < set.planets; i++) {
+            const planet = makeGear(externalGear(set.planet, 0.03, false), gearColors.planet, new THREE.Vector3(set.x, 0, 0), `planet-${index}`);
+            pickables.push(planet.mesh);
+            root.add(planet.pivot);
+            const pin = cylinderAlongX(0.026, 0.026, 0.22, shaftMat, null, 16);
+            carrier.add(pin);
+            planets.push({ ...planet, pin, index: i });
+        }
+        // carrier pins ride with the carrier group, so place them at their base phase
+        planets.forEach((p, i) => {
+            const phi = (i / set.planets) * TWO_PI;
+            p.pin.position.set(0, Math.sin(phi) * set.orbit, -Math.cos(phi) * set.orbit);
+        });
+        return { set, sun, ring, carrier, planets };
     });
 
-    // ---- Shifter (H-gate) + sleeve flash state -----------------------------------------
-    let shifter = null;
-    import("./machina-shifter.js")
-        .then(({ createShifter }) => {
-            shifter = createShifter();
-            shifter.group.position.set(-0.32, 1.36, 0);
-            root.add(shifter.group);
-        })
-        .catch((error) => console.warn("MACHINA shifter module failed to load:", error));
+    // ---- Shift elements (clutch / brake packs) -------------------------------------------
+    // Alternating steel and friction discs. Applied pack: discs squeeze together and glow.
+    const ELEMENT_X = { A: -1.18, B: -0.2, C: 0.34, D: 1.12, E: 1.55 };
+    const steelMat = metal("#c3ced9", { roughness: 0.25 });
+    const frictionMat = metal("#8a5a3a", { metalness: 0.3, roughness: 0.75 });
+    const elementPacks = {};
 
-    const sleeveFlash = SLEEVES.map(() => 0);
-    let lastGear = 0;
+    for (const name of ELEMENTS) {
+        const pack = new THREE.Group();
+        pack.position.set(ELEMENT_X[name], 0, 0);
+        const discs = [];
+        for (let i = 0; i < 6; i++) {
+            const friction = i % 2 === 1;
+            const outer = name === "A" || name === "B" ? 0.56 : 0.5;
+            const disc = cylinderAlongX(outer, outer, 0.018, friction ? frictionMat : steelMat, i === 0 ? `element-${name}` : null, 64);
+            disc.position.x = (i - 2.5) * 0.034;
+            disc.userData.baseX = disc.position.x;
+            pack.add(disc);
+            discs.push(disc);
+        }
+        const hubRing = cylinderAlongX(0.17, 0.17, 0.18, hubMat, null, 32);
+        pack.add(hubRing);
+        const glow = new THREE.Mesh(
+            new THREE.TorusGeometry(0.56, 0.014, 10, 80).rotateY(Math.PI / 2),
+            new THREE.MeshStandardMaterial({ color: "#ff8a00", emissive: "#ff8a00", emissiveIntensity: 0, toneMapped: false })
+        );
+        pack.add(glow);
 
-    // Optional button; the floating sound dock exists on every section regardless.
-    import("./machina-audio.js")
-        .then(({ machinaAudio }) => machinaAudio.bindButton($("#gb-sound")))
-        .catch((error) => console.warn("MACHINA audio module failed to load:", error));
+        // piston plate that pushes the discs together
+        const piston = cylinderAlongX(0.3, 0.3, 0.025, metal("#e87532", { roughness: 0.3 }), null, 32);
+        piston.position.x = 0.15;
+        pack.add(piston);
 
-    // ---- Housing -------------------------------------------------------------------------
-    const housingSize = [2.95, 2.4, 1.75];
+        // element letter label on a sprite
+        const label = makeLabel(name);
+        label.position.set(0, 0.74, 0);
+        pack.add(label);
+
+        root.add(pack);
+        elementPacks[name] = { pack, discs, glow, piston, label };
+    }
+
+    function makeLabel(text) {
+        const canvas = document.createElement("canvas");
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "rgba(5,8,15,0.7)";
+        ctx.beginPath(); ctx.arc(64, 64, 52, 0, TWO_PI); ctx.fill();
+        ctx.strokeStyle = "#00e5ff"; ctx.lineWidth = 5; ctx.stroke();
+        ctx.fillStyle = "#ffffff"; ctx.font = "bold 64px monospace";
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(text, 64, 68);
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false, toneMapped: false }));
+        sprite.scale.setScalar(0.2);
+        sprite.renderOrder = 8;
+        return sprite;
+    }
+
+    // ---- Valve body: hydraulic channels light up with element pressure ------------------
+    const valveBody = new THREE.Group();
+    const valveBlock = new THREE.Mesh(new RoundedBoxGeometry(3.6, 0.16, 0.9, 3, 0.03), metal("#2d3d4f", { roughness: 0.45 }));
+    valveBlock.position.set(-0.1, -0.98, 0);
+    valveBlock.castShadow = true;
+    valveBody.add(valveBlock);
+    addPick(valveBlock, "valve-body");
+    const channelMats = {};
+    for (const name of ELEMENTS) {
+        const x = ELEMENT_X[name];
+        channelMats[name] = new THREE.MeshStandardMaterial({ color: "#0a3a48", emissive: "#00e5ff", emissiveIntensity: 0, toneMapped: false });
+        const feed = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.42, 12), channelMats[name]);
+        feed.position.set(x, -0.77, 0);
+        valveBody.add(feed);
+        const groove = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.012, 0.8), channelMats[name]);
+        groove.position.set(x, -0.896, 0);
+        valveBody.add(groove);
+    }
+    root.add(valveBody);
+
+    // ---- Housing --------------------------------------------------------------------------
+    const housingSize = [5.0, 1.95, 1.75];
     const housing = new THREE.Group();
-    housing.position.set(-0.32, 0, 0);
+    housing.position.set(-0.2, -0.05, 0);
     housing.add(new THREE.Mesh(
-        new RoundedBoxGeometry(...housingSize, 3, 0.06),
-        new THREE.MeshPhysicalMaterial({ color: "#2a3b4d", metalness: 0.6, roughness: 0.4, transparent: true, opacity: 0.1, depthWrite: false })
+        new RoundedBoxGeometry(...housingSize, 4, 0.08),
+        new THREE.MeshPhysicalMaterial({ color: "#2a3b4d", metalness: 0.6, roughness: 0.4, transparent: true, opacity: 0.07, depthWrite: false })
     ));
     housing.add(new THREE.LineSegments(
         new THREE.EdgesGeometry(new THREE.BoxGeometry(...housingSize)),
-        new THREE.LineBasicMaterial({ color: new THREE.Color(COLORS.cyan).multiplyScalar(1.4), transparent: true, opacity: 0.8, toneMapped: false })
+        new THREE.LineBasicMaterial({ color: new THREE.Color(COLORS.cyan).multiplyScalar(1.4), transparent: true, opacity: 0.75, toneMapped: false })
     ));
     scene.add(housing);
 
-    // ---- Part info -------------------------------------------------------------------------
+    root.traverse((o) => { if (o.isMesh && o.material && !o.material.isMeshBasicMaterial) { o.castShadow = o.castShadow || false; } });
+
+    // ---- Part info --------------------------------------------------------------------------
     const staticInfo = {
-        "flywheel": ["Flywheel", "Bolted to the crankshaft. It spins at engine speed and is one side of the clutch.", "Cast iron simulation", "Stores rotational energy and gives the clutch a friction surface."],
-        "clutch-disc": ["Clutch Disc", "A friction disc splined to the input shaft. It only turns at engine speed when the clutch is fully closed. Watch it lag behind the flywheel while the clutch slips.", "Friction lining on steel", "Connects and disconnects engine and gearbox."],
-        "pressure-plate": ["Pressure Plate", "Clamps the clutch disc against the flywheel. Pressing the pedal pulls it away.", "Steel simulation", "Applies the clamping force that locks the clutch."],
-        "input-shaft": ["Input Shaft", "Carries engine power from the clutch into the gearbox. It always drives the countershaft through the input gear pair.", "Hardened steel simulation", "Delivers engine torque to the gear train."],
-        "output-shaft": ["Output Shaft", "Sits in line with the input shaft. The gears ride freely on it until a sleeve locks one of them. It always turns with the wheels.", "Hardened steel simulation", "Sends torque on to the final drive."],
-        "countershaft": ["Countershaft", "Turns whenever the input shaft turns. One gear from every pair is fixed to it.", "Hardened steel simulation", "Distributes input power to all the gear pairs."],
-        "input-gear": ["Input Gear", `${INPUT_PAIR.input} teeth, fixed to the input shaft. It drives the countershaft gear (${INPUT_PAIR.counter} teeth), a 1.5:1 reduction shared by every gear.`, "Case-hardened steel simulation", "Starts the power path through the gearbox."],
-        "counter-input-gear": ["Countershaft Input Gear", `${INPUT_PAIR.counter} teeth. Meshed with the input gear at all times.`, "Case-hardened steel simulation", "Turns the countershaft."],
-        "idler": ["Reverse Idler", `${REVERSE_IDLER.teeth} teeth. Sits between the reverse gears so the output turns the opposite way.`, "Case-hardened steel simulation", "Flips the direction of rotation for reverse."],
-        "fork": ["Shift Fork", "Slides a sleeve along its hub when you change gear. Only one sleeve may be engaged at a time.", "Steel simulation", "Moves the synchro sleeve."],
-        "flange": ["Output Flange", "Where the gearbox hands torque to the driveshaft. The AWD module will connect here.", "Forged steel simulation", "Connects to the driveshaft."]
+        "flywheel": ["Drive Plate / Flywheel", "Bolted to the crankshaft. In an automatic it is a thin drive plate that turns the torque converter cover at engine speed.", "Steel simulation", "Carries engine torque into the converter."],
+        "input-shaft": ["Input Shaft", "Splined to the converter turbine. It feeds the sun gears of the three planetary sets, so it turns at turbine speed, not engine speed.", "Hardened steel simulation", "Delivers torque to the gear sets."],
+        "output-shaft": ["Output Shaft", "Joined to the planet carriers. It always turns with the wheels, multiplied by the final drive.", "Hardened steel simulation", "Sends torque to the driveshaft."],
+        "flange": ["Output Flange", "Where the gearbox hands torque to the driveshaft. The AWD module will connect here.", "Forged steel simulation", "Connects to the driveshaft."],
+        "converter": ["Torque Converter", "A fluid coupling between engine and gearbox. It lets the engine idle at a standstill and multiplies torque up to about 1.9x at stall, then locks up at cruise to avoid slip losses.", "Welded steel, transparent shell", "Replaces the clutch pedal."],
+        "impeller": ["Impeller (Pump)", "Spins with the engine and flings oil outward toward the turbine.", "Stamped steel simulation", "Drives the fluid."],
+        "turbine": ["Turbine", "Catches the oil flow and is splined to the input shaft. It lags the impeller when the converter slips.", "Stamped steel simulation", "Receives torque from the fluid."],
+        "stator-blades": ["Stator", "Redirects returning oil so it pushes the impeller forward. This is what multiplies torque. A one-way clutch lets it freewheel once speeds match.", "Cast aluminium simulation", "Multiplies torque at low speed."],
+        "lockup": ["Lock-up Clutch", "Presses the turbine to the converter cover and bypasses the fluid. Watch the cyan ring: it closes in the higher gears at light throttle.", "Friction lining on steel", "Removes slip for efficiency."],
+        "valve-body": ["Valve Body", "The hydraulic brain. Solenoids route pressure to each shift element. Cyan channels light up when their element is applied.", "Aluminium simulation", "Applies and releases the shift elements."]
     };
 
     function infoFor(key) {
         if (staticInfo[key]) return staticInfo[key];
+        const index = Number(key.split("-")[1]);
 
-        if (key.startsWith("sleeve-")) {
-            const def = SLEEVES[Number(key.slice(7))];
-            return [`Synchro Sleeve (${def.name})`, "Locks a free-spinning gear to the output shaft. Real gearboxes use a cone synchroniser first to match the speeds so the dogs engage without a crunch.", "Steel and brass simulation", "Selects a gear."];
+        if (key.startsWith("element-")) {
+            const name = key.slice(8);
+            const gears = GEARS.filter((g) => g.elements.includes(name)).map((g) => g.label).join(", ");
+            return [`Shift Element ${name}`, `A stack of steel and friction discs squeezed by a hydraulic piston. It holds or couples part of a planetary set. Applied in gears: ${gears}. (Layout is simplified for this simulation.)`, "Steel and friction lining", "Locks a planetary member."];
         }
-
-        const [kind, gearText] = key.split("-");
-        const gear = Number(gearText);
-        const entry = GEARS.find((g) => g.gear === gear);
-        if (!entry) return null;
-
-        const name = gear === -1 ? "Reverse" : ordinal(gear);
-        const ratio = gearRatio(gear).toFixed(2);
-
-        if (kind === "main") {
-            return [`${name} Gear (Output)`, `${entry.main} teeth. It rides freely on the output shaft until its sleeve locks it. Overall ratio ${ratio}:1 before the ${FINAL_DRIVE}:1 final drive.`, "Case-hardened steel simulation", "Transfers torque to the output shaft when selected."];
-        }
-        return [`${name} Gear (Countershaft)`, `${entry.counter} teeth, fixed to the countershaft. Always turning while the input shaft turns.`, "Case-hardened steel simulation", "Drives its partner gear on the output shaft."];
+        const set = PLANETARY_SETS[index];
+        if (!set) return null;
+        if (key.startsWith("sun-")) return [`Sun Gear (${set.name})`, `${set.sun} teeth at the centre of the set, driven by the input shaft.`, "Case-hardened steel simulation", "Drives the planets."];
+        if (key.startsWith("planet-")) return [`Planet Gears (${set.name})`, `${set.planets} planets of ${set.planet} teeth mesh with both the sun and the ring. They orbit on the carrier while spinning on their own pins.`, "Case-hardened steel simulation", "Transfer torque between sun, ring and carrier."];
+        if (key.startsWith("ring-")) return [`Ring Gear (${set.name})`, `${set.ring} internal teeth. Fixing or driving the ring changes the ratio of the set.`, "Case-hardened steel simulation", "Reacts or drives the set."];
+        if (key.startsWith("carrier-")) return [`Planet Carrier (${set.name})`, "Holds the planets on their pins. All three carriers are tied to the output shaft in this simplified layout.", "Cast steel simulation", "Carries the planets round."];
+        return null;
     }
 
     const MATERIAL_HIGHLIGHT = new THREE.Color("#00e5ff");
@@ -816,10 +884,9 @@ function init(container) {
         if (ui.partMaterial) ui.partMaterial.textContent = info ? info[2] : "—";
         if (ui.partFunction) ui.partFunction.textContent = info ? info[3] : "—";
     }
-
     showInfo(null);
 
-    // ---- Picking ---------------------------------------------------------------------------
+    // ---- Picking ----------------------------------------------------------------------------
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let downAt = null;
@@ -842,6 +909,7 @@ function init(container) {
         if (moved > 5) return;
         pointerTo(e);
         const hit = pick();
+        if (selected?.material?.emissive) { selected.material.emissive.set("#000000"); selected.material.emissiveIntensity = 0; }
         selected = hit && hit !== selected ? hit : null;
         showInfo(selected ? selected.userData.partKey : null);
     });
@@ -851,17 +919,16 @@ function init(container) {
         renderer.domElement.style.cursor = pick() ? "pointer" : "grab";
     });
 
-    // ---- Simulation + controls ------------------------------------------------------------------
+    // ---- Simulation + controls -----------------------------------------------------------------
     const sim = createDrivetrain();
     const auto = createAuto();
-    let autoEnabled = false;
+    let sport = false;
 
-    // Shared state for the AWD, air-suspension and hybrid modules to read later.
-    // Shared bus. The engine page publishes bus.engine; link.engine decides
-    // whether the engine follows this gearbox (rpm, boost) and the gearbox
-    // follows the engine's ON/OFF switch.
+    // Shared bus: the engine page publishes bus.engine; link.engine decides whether the
+    // engine follows this gearbox (rpm, boost) and the gearbox follows the engine ON/OFF.
     const bus = (window.machina = window.machina || {});
     bus.drivetrain = sim;
+    bus.requestSelector = (id) => requestSelector(sim, id);
     bus.link = bus.link || { engine: false };
 
     let linked = false;
@@ -877,7 +944,6 @@ function init(container) {
             : "ENGINE LINK: NO ENGINE ON PAGE";
         linkButton.classList.toggle("active", hasEngine && bus.link.engine);
     };
-
     linkButton?.addEventListener("click", () => {
         bus.link.engine = !bus.link.engine;
         refreshLink();
@@ -886,44 +952,79 @@ function init(container) {
     window.addEventListener("machina-link-change", refreshLink);
     refreshLink();
 
-    const sliders = { throttle: 0, clutch: 0, brake: 0 };
+    const sliders = { throttle: 0, brake: 0 };
     const keys = new Set();
-    const keyed = { throttle: 0, clutch: 0, brake: 0 };
+    const keyed = { throttle: 0, brake: 0 };
     let keysEnabled = false;
 
-    for (const name of ["throttle", "clutch", "brake"]) {
+    for (const name of ["throttle", "brake"]) {
         ui[name]?.addEventListener("input", () => { sliders[name] = Number(ui[name].value); });
     }
+
+    // The clutch pedal does not exist on an automatic: hide the old slider.
+    if (ui.clutch) {
+        const wrap = ui.clutch.closest("label") || ui.clutch.closest(".gb-control, .control, .slider-row");
+        (wrap || ui.clutch).style.display = "none";
+    }
+    // old manual gear buttons are replaced by the selector panel below
+    ui.gearButtons.forEach((b) => { b.style.display = "none"; });
+
+    // ---- Selector panel (P R N D S M + paddles), built here so no HTML change is needed ----------
+    const selectorPanel = document.createElement("div");
+    selectorPanel.id = "gb-selector";
+    selectorPanel.setAttribute("role", "group");
+    selectorPanel.setAttribute("aria-label", "Gear selector");
+    selectorPanel.style.cssText = "display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0;width:100%";
+    const buttonClass = ui.gearButtons[0]?.className || "";
+    const selectorButtons = {};
+
+    const SELECTORS = [["P", "P"], ["R", "R"], ["N", "N"], ["D", "D"], ["S", "SPORT"], ["M", "MANUAL"]];
+    for (const [id, label] of SELECTORS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = buttonClass;
+        b.textContent = label;
+        b.dataset.selector = id;
+        b.style.minWidth = id.length === 1 && label.length === 1 ? "44px" : "auto";
+        b.addEventListener("click", () => requestSelector(sim, id));
+        selectorPanel.appendChild(b);
+        selectorButtons[id] = b;
+    }
+    const paddle = (label, delta, title) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = buttonClass;
+        b.textContent = label;
+        b.title = title;
+        b.addEventListener("click", () => paddleShift(sim, delta));
+        selectorPanel.appendChild(b);
+        return b;
+    };
+    paddle("− DOWN", -1, "Downshift (Q)");
+    paddle("UP +", 1, "Upshift (E)");
+    const statusLine = document.createElement("div");
+    statusLine.style.cssText = "flex-basis:100%;font:600 12px/1.4 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.06em;color:#7fdcff;min-height:1.4em";
+    selectorPanel.appendChild(statusLine);
+
+    const anchor = ui.gearButtons[0]?.parentElement;
+    if (anchor) anchor.parentElement.insertBefore(selectorPanel, anchor);
+    else if (ui.section) ui.section.appendChild(selectorPanel);
 
     document.addEventListener("pointerdown", (event) => {
         keysEnabled = !!ui.section && ui.section.contains(event.target);
     });
 
-    const shiftBy = (delta) => {
-        const order = [-1, 0, 1, 2, 3, 4, 5, 6];
-        const index = order.indexOf(sim.targetGear);
-        const next = order[clamp(index + delta, 0, order.length - 1)];
-        requestGear(sim, next);
-    };
-
     document.addEventListener("keydown", (event) => {
-        if (!keysEnabled || event.repeat && event.code !== "Space") return;
+        if (!keysEnabled || (event.repeat && event.code !== "Space")) return;
         if (event.target.closest?.("input[type=text], textarea")) return;
-
-        const handled = { KeyW: "throttle", KeyS: "brake", Space: "clutch" };
-        if (handled[event.code]) {
-            keys.add(event.code);
-            event.preventDefault();
-        } else if (event.code === "KeyE") { shiftBy(1); event.preventDefault(); }
-        else if (event.code === "KeyQ") { shiftBy(-1); event.preventDefault(); }
-        else if (event.code === "KeyN") { requestGear(sim, 0); event.preventDefault(); }
+        const selectorKeys = { KeyP: "P", KeyR: "R", KeyN: "N", KeyD: "D", KeyG: "S", KeyM: "M" };
+        if (event.code === "KeyW" || event.code === "KeyS") { keys.add(event.code); event.preventDefault(); }
+        else if (selectorKeys[event.code]) { requestSelector(sim, selectorKeys[event.code]); event.preventDefault(); }
+        else if (event.code === "KeyE") { paddleShift(sim, 1); event.preventDefault(); }
+        else if (event.code === "KeyQ") { paddleShift(sim, -1); event.preventDefault(); }
     });
     document.addEventListener("keyup", (event) => keys.delete(event.code));
     window.addEventListener("blur", () => keys.clear());
-
-    ui.gearButtons.forEach((button) => {
-        button.addEventListener("click", () => requestGear(sim, Number(button.dataset.gear)));
-    });
 
     const setToggle = (button, on, label) => {
         if (!button) return;
@@ -931,23 +1032,17 @@ function init(container) {
         button.classList.toggle("active", on);
     };
 
+    // The old AUTO button becomes the SPORT toggle (sharper shifts, higher shift points)
     ui.auto?.addEventListener("click", () => {
-        autoEnabled = !autoEnabled;
-        if (!autoEnabled) {
-            auto.demo = false; auto.phase = "run"; auto.pedal = 0;
-            for (const name of ["throttle", "clutch", "brake"]) {
-                sliders[name] = 0;
-                if (ui[name]) ui[name].value = 0;
-            }
-        }
-        setToggle(ui.auto, autoEnabled, "AUTO CLUTCH + SHIFT");
-        setToggle(ui.demo, auto.demo, "DEMO DRIVE");
+        sport = !sport;
+        if (sport) { if (sim.selector === "D" || sim.selector === "N" || sim.selector === "P") requestSelector(sim, sim.selector === "D" ? "S" : sim.selector); }
+        else if (sim.selector === "S") requestSelector(sim, "D");
+        setToggle(ui.auto, sport, "SPORT MODE");
     });
-
     ui.demo?.addEventListener("click", () => {
         auto.demo = !auto.demo;
-        if (auto.demo) { autoEnabled = true; auto.t = 0; }
-        setToggle(ui.auto, autoEnabled, "AUTO CLUTCH + SHIFT");
+        auto.t = 0;
+        if (!auto.demo) { for (const n of ["throttle", "brake"]) { sliders[n] = 0; if (ui[n]) ui[n].value = 0; } }
         setToggle(ui.demo, auto.demo, "DEMO DRIVE");
     });
 
@@ -957,8 +1052,7 @@ function init(container) {
         housing.visible = housingOn;
         setToggle(ui.housing, housingOn, "HOUSING");
     });
-
-    setToggle(ui.auto, false, "AUTO CLUTCH + SHIFT");
+    setToggle(ui.auto, false, "SPORT MODE");
     setToggle(ui.demo, false, "DEMO DRIVE");
     setToggle(ui.housing, true, "HOUSING");
 
@@ -973,36 +1067,23 @@ function init(container) {
         tween.active = true;
     });
 
-    // ---- Per-frame update ------------------------------------------------------------------------
     const angle = { flywheel: 0, input: 0, output: 0 };
-    const glowColor = new THREE.Color(COLORS.orange);
-    const inputGlow = new THREE.Color(COLORS.cyan);
-    const allGearMeshes = [
-        gearParts.input.mesh, gearParts.counterInput.mesh, gearParts.idler.mesh,
-        ...Object.values(gearParts.mains).map((p) => p.mesh),
-        ...Object.values(gearParts.counters).map((p) => p.mesh)
-    ];
-
-    function setGlow(mesh, color, intensity) {
-        mesh.material.emissive.copy(color);
-        mesh.material.emissiveIntensity = intensity;
-    }
 
     function stepSim(dt) {
-        const user = {
-            throttle: Math.max(sliders.throttle, keyed.throttle),
-            pedal: Math.max(sliders.clutch, keyed.clutch),
-            brake: Math.max(sliders.brake, keyed.brake)
+        keyed.throttle = approach(keyed.throttle, keys.has("KeyW") ? 1 : 0, 7, dt);
+        keyed.brake = approach(keyed.brake, keys.has("KeyS") ? 1 : 0, 10, dt);
+        const hud = bus.hud || { throttle: 0, brake: 0 };
+        let user = {
+            throttle: Math.max(sliders.throttle, keyed.throttle, hud.throttle),
+            brake: Math.max(sliders.brake, keyed.brake, hud.brake)
         };
+        if (auto.demo) {
+            user = autoDrive(sim, auto, user, dt);
+            if (ui.throttle) ui.throttle.value = user.throttle;
+            if (ui.brake) ui.brake.value = user.brake;
+        }
 
-        keyed.throttle = approach(keyed.throttle, keys.has("KeyW") ? 1 : 0, 9, dt);
-        keyed.clutch = approach(keyed.clutch, keys.has("Space") ? 1 : 0, 22, dt);
-        keyed.brake = approach(keyed.brake, keys.has("KeyS") ? 1 : 0, 16, dt);
-
-        const ctrl = autoEnabled ? autoDrive(sim, auto, user, dt) : user;
-
-        // Link to the engine page as soon as it exists (first frame only, so the
-        // user can still switch it off).
+        // Link to the engine page as soon as it exists (first frame only, so the user can still switch it off).
         if (!linkApplied && bus.engine) {
             linkApplied = true;
             bus.link.engine = true;
@@ -1011,14 +1092,7 @@ function init(container) {
         }
         linked = !!(bus.link.engine && bus.engine);
 
-        stepDrivetrain(sim, dt, { ...ctrl, running: linked ? bus.engine.running !== false : true });
-
-        // keep the on-screen sliders in step with automatic driving
-        if (autoEnabled) {
-            if (ui.throttle) ui.throttle.value = ctrl.throttle;
-            if (ui.brake) ui.brake.value = ctrl.brake;
-            if (ui.clutch) ui.clutch.value = ctrl.pedal;
-        }
+        stepDrivetrain(sim, dt, { ...user, running: linked ? bus.engine.running !== false : true });
 
         angle.flywheel += sim.rpm * RAD_PER_RPM_SEC * dt;
         angle.input += sim.inputRpm * RAD_PER_RPM_SEC * dt;
@@ -1027,56 +1101,59 @@ function init(container) {
         renderTelemetry(dt);
     }
 
-    function updateVisuals(time, dt) {
-        // sleeve flash when a gear locks in
-        if (sim.gear !== lastGear) {
-            if (sim.gear !== 0) {
-                const hit = sleeveTargetFor(sim.gear);
-                if (hit) sleeveFlash[hit.sleeve] = 1;
-            }
-            lastGear = sim.gear;
-        }
-        sleeveMeshes.forEach((mesh, i) => {
-            sleeveFlash[i] = Math.max(0, sleeveFlash[i] - dt * 3.5);
-            mesh.material.emissive.set(COLORS.orange);
-            mesh.material.emissiveIntensity = sleeveFlash[i] * 2;
-        });
+    // ---- Per-frame visuals -----------------------------------------------------------------------
+    const glowOrange = new THREE.Color(COLORS.orange);
+    const glowCyan = new THREE.Color(COLORS.cyan);
+    const setGlow = (mesh, color, intensity) => {
+        mesh.material.emissive.copy(color);
+        mesh.material.emissiveIntensity = intensity;
+    };
 
-        shifter?.update(dt, time, sim);
-
-        const a = computeGearAngles(angle.input);
-
+    function updateVisuals(time) {
         flywheelGroup.rotation.x = angle.flywheel;
+        impeller.rotation.x = angle.flywheel;
+        turbineGroup.rotation.x = angle.input;
+        // stator is held by its one-way clutch while the converter multiplies torque
+        stator.rotation.x = sim.torqueMult > 1.03 ? 0 : angle.input * 0.9;
         inputGroup.rotation.x = angle.input;
         outputGroup.rotation.x = angle.output;
-        gearParts.input.mesh.rotation.z = angle.input;
-        // counter gears and shaft sit inside counterGroup, so one rotation turns them all
-        counterGroup.rotation.x = a.counter;
-        gearParts.idler.mesh.rotation.z = a.idler;
-        for (const g of GEARS) gearParts.mains[g.gear].mesh.rotation.z = a.mains[g.gear];
 
-        // clutch pedal: plate pulls away from the disc
-        pressurePlate.position.x = -2.26 + sim.pedal * 0.12;
-        clutchDisc.position.x = -2.36;
+        const torqueFraction = clamp(Math.abs(sim.wheelTorque) / 5000, 0, 1);
 
-        // shift forks and sleeves follow the core's sleeve offsets
-        SLEEVES.forEach((def, i) => {
-            sleeveMeshes[i].position.x = def.x + sim.sleeves[i];
-            forks[i].position.x = def.x + sim.sleeves[i];
+        planetary.forEach((unit, j) => {
+            const thetaSun = angle.input * SUN_SPEED[j];
+            const thetaCarrier = angle.output;
+            const result = planetaryAngles(unit.set, thetaSun, thetaCarrier);
+
+            unit.sun.mesh.rotation.z = thetaSun;
+            unit.ring.mesh.rotation.z = result.ring;
+            unit.carrier.rotation.x = thetaCarrier;
+            result.planets.forEach((p, i) => {
+                const planet = unit.planets[i];
+                planet.mesh.rotation.z = p.spin;
+                planet.pivot.position.set(unit.set.x, Math.sin(p.phi) * unit.set.orbit, -Math.cos(p.phi) * unit.set.orbit);
+            });
+
+            const loaded = sim.gear !== 0 || sim.shifting;
+            setGlow(unit.sun.mesh, glowCyan, sim.inputRpm > 30 ? 0.12 + torqueFraction * 0.3 : 0);
+            unit.planets.forEach((p) => setGlow(p.mesh, glowOrange, loaded ? 0.1 + torqueFraction * 0.7 : 0));
         });
 
-        // power path glow
-        allGearMeshes.forEach((m) => setGlow(m, glowColor, 0));
-        const torqueFraction = clamp(Math.abs(sim.wheelTorque) / 4000, 0, 1);
-        setGlow(gearParts.input.mesh, inputGlow, sim.inputRpm > 30 ? 0.25 : 0);
-        setGlow(gearParts.counterInput.mesh, inputGlow, sim.inputRpm > 30 ? 0.25 : 0);
-
-        if (sim.gear !== 0) {
-            const strength = 0.35 + torqueFraction * 0.9;
-            setGlow(gearParts.mains[sim.gear].mesh, glowColor, strength);
-            setGlow(gearParts.counters[sim.gear].mesh, glowColor, strength);
-            if (sim.gear === -1) setGlow(gearParts.idler.mesh, glowColor, strength);
+        // shift elements: discs squeeze together, rim and hydraulic channel glow
+        for (const name of ELEMENTS) {
+            const v = sim.elements[name];
+            const e = elementPacks[name];
+            e.discs.forEach((d) => { d.position.x = d.userData.baseX * (1 - 0.42 * v); });
+            e.piston.position.x = 0.15 - v * 0.06;
+            e.glow.material.emissiveIntensity = v * 2.6;
+            e.label.material.opacity = 0.55 + v * 0.45;
+            channelMats[name].emissiveIntensity = v * (1.6 + Math.sin(time * 0.012) * 0.3);
         }
+
+        // lock-up clutch
+        lockPiston.position.x = 0.22 - sim.lockup * 0.07;
+        lockGlow.material.emissiveIntensity = sim.lockup * 3;
+        lockGlow.position.x = lockPiston.position.x;
 
         if (selected && selected.material?.emissive) {
             selected.material.emissive.copy(MATERIAL_HIGHLIGHT);
@@ -1084,10 +1161,14 @@ function init(container) {
         }
 
         orangeLight.intensity = 10 + torqueFraction * 14;
+        bloomPass.strength = 0.45 + torqueFraction * 0.25;
     }
 
-    // ---- Telemetry ------------------------------------------------------------------------------------
+    // ---- Telemetry -------------------------------------------------------------------------------------
     let telemetryClock = 0;
+    let lastSeq = 0;
+    let toast = "";
+    let toastTimer = 0;
     const setStat = (selector, value) => {
         const node = $(selector)?.firstChild;
         if (node && node.nodeType === Node.TEXT_NODE) node.nodeValue = `${value} `;
@@ -1095,19 +1176,29 @@ function init(container) {
     const text = (el, value) => { if (el && el.textContent !== String(value)) el.textContent = value; };
 
     function renderTelemetry(dt) {
+        if (sim.shiftSeq !== lastSeq) {
+            lastSeq = sim.shiftSeq;
+            const from = GEAR_LABEL(sim.fromGear);
+            const to = GEAR_LABEL(sim.targetGear);
+            toast = `${sim.shiftKind === "UP" ? "UPSHIFT" : "DOWNSHIFT"} ${from} → ${to} · ${Math.round(sim.shiftTime * 1000)} ms`;
+            toastTimer = 1.6;
+        }
+        toastTimer -= dt;
+
         telemetryClock += dt;
         if (telemetryClock < 0.08) return;
         telemetryClock = 0;
 
-        text(ui.gear, GEAR_LABEL(sim.gear));
+        const shownGear = sim.shifting ? sim.targetGear : sim.gear;
+        text(ui.gear, sim.selector === "P" || sim.selector === "N" ? sim.selector : GEAR_LABEL(shownGear));
         text(ui.rpm, Math.round(sim.rpm));
         text(ui.speed, Math.abs(Math.round(sim.speedKmh)));
-        text(ui.ratio, sim.gear === 0 ? "—" : (gearRatio(sim.gear) * FINAL_DRIVE).toFixed(2));
+        text(ui.ratio, shownGear === 0 ? "—" : (sim.ratioNow * FINAL_DRIVE).toFixed(2));
         text(ui.input, Math.round(sim.inputRpm));
         text(ui.output, Math.round(Math.abs(sim.outputRpm)));
         text(ui.torque, Math.round(sim.wheelTorque));
 
-        if (ui.couplingBar) ui.couplingBar.style.width = `${sim.coupling * 100}%`;
+        if (ui.couplingBar) ui.couplingBar.style.width = `${Math.max(sim.lockup, sim.torqueMult > 1 ? 0.08 : 0) * 100}%`;
         if (ui.rpmBar) {
             ui.rpmBar.style.width = `${Math.min(sim.rpm / 8000, 1) * 100}%`;
             ui.rpmBar.classList.toggle("over", sim.rpm >= REDLINE - 200);
@@ -1125,14 +1216,15 @@ function init(container) {
             if (Number.isFinite(bus.engine.temp)) setStat("#stat-temp", Math.round(bus.engine.temp));
         }
 
-        ui.gearButtons.forEach((b) => {
-            const g = Number(b.dataset.gear);
-            b.classList.toggle("active", g === sim.gear);
-            b.classList.toggle("pending", g === sim.targetGear && g !== sim.gear);
-        });
+        for (const [id, b] of Object.entries(selectorButtons)) {
+            b.classList.toggle("active", id === sim.selector);
+        }
+        const lock = sim.lockup > 0.5 ? "LOCKED" : sim.torqueMult > 1.05 ? `MULT ${sim.torqueMult.toFixed(1)}x` : "SLIPPING";
+        const info = `${sim.selector}${sim.selector === "M" ? ` · HOLD ${sim.manualGear}` : ""}  ·  CONVERTER ${lock}  ·  SLIP ${Math.round(Math.abs(sim.slip))} RPM`;
+        text(statusLine, toastTimer > 0 ? `${toast}   |   ${info}` : info);
     }
 
-    // ---- Loop / sizing ----------------------------------------------------------------------------------
+    // ---- Loop / sizing -----------------------------------------------------------------------------------
     let lastTime = 0;
     let looping = false;
 
@@ -1149,7 +1241,7 @@ function init(container) {
         }
 
         controls.update();
-        updateVisuals(time, dt);
+        updateVisuals(time);
         composer.render(dt);
     }
 
@@ -1161,8 +1253,8 @@ function init(container) {
     };
     const stop = () => { looping = false; renderer.setAnimationLoop(null); };
 
-    // The drivetrain keeps running when the 3D view is off-screen, so a linked
-    // engine viewer never freezes while you scroll.
+    // The drivetrain keeps running when the 3D view is off-screen, so the engine
+    // (and its sound) never freezes while you scroll.
     let simLast = performance.now();
     function simTick(now) {
         const dt = Math.min((now - simLast) / 1000, 0.1);

@@ -6,6 +6,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
 const COLORS = {
     background: "#05080f",
     cyan: "#00e5ff",
@@ -129,7 +130,7 @@ const bloomPass = new UnrealBloomPass(
             Math.max(1, container.clientWidth),
             Math.max(1, container.clientHeight)
         ),
-        0.75,
+        0.55,
         0.65,
         0.82
     );
@@ -1367,7 +1368,6 @@ const sim = {
     rpm: 0,
     temp: 40,
     boost: 0,
-    load: 0,
     crankDeg: 0
 };
 
@@ -1417,10 +1417,16 @@ function updateSimulation(time, dt) {
     // Linked: the gearbox decides the crank speed (it also accounts for the
     // wheels turning the engine over) and the throttle sets the boost.
     const linkedBoost = sim.running
-        ? clamp(drive?.throttle * (0.25 + (drive.rpm / MAX_RPM) * 1.75), 0, 2)
+        ? clamp((Number(drive?.throttle) || 0) * (0.25 + ((Number(drive?.rpm) || 0) / MAX_RPM) * 1.75), 0, 2)
         : 0;
 
-    const targetRpm = linked ? drive.rpm : !sim.running ? 0 : sim.manual ? sim.manualRpm : autoRpm;
+    // The engine never drops below idle while it is running, so it keeps
+    // turning (and sounding) after a refresh even if the gearbox reports 0.
+    const IDLE_RPM = 900;
+    const driveRpm = Number.isFinite(drive?.rpm) ? drive.rpm : 0;
+    const targetRpm = linked
+        ? (sim.running ? Math.max(driveRpm, IDLE_RPM) : 0)
+        : !sim.running ? 0 : sim.manual ? sim.manualRpm : autoRpm;
     const targetBoost = linked ? linkedBoost : !sim.running ? 0 : sim.manual ? sim.manualBoost : autoBoost;
     const targetTemp = sim.running ? 88 + (sim.rpm / MAX_RPM) * 12 + Math.sin(time * 0.00045) * 3 : 35;
 
@@ -1432,9 +1438,6 @@ function updateSimulation(time, dt) {
     sim.rpm = approach(sim.rpm, targetRpm, linked ? 30 : 3, dt);
     sim.temp = approach(sim.temp, targetTemp, 0.15, dt);
     sim.boost = approach(sim.boost, targetBoost, 2, dt);
-    sim.load = linked
-        ? clamp(drive.throttle, 0, 1)
-        : sim.running ? clamp(0.25 + targetBoost * 0.4, 0, 1) : 0;
 
     sim.crankDeg = (sim.crankDeg + (sim.rpm * 6 / SLOW_MOTION) * dt) % 720;
 }
@@ -1536,21 +1539,14 @@ function updateEngineVisuals(time, dt) {
 
     const load = sim.rpm / MAX_RPM;
     const heat = clamp(sim.rpm / 5500, 0, 1);
-
-    // exhaust pop flash + blow-off reaction (driven by machina-audio events)
-    popLife = Math.max(0, popLife - dt * 8);
-    bovLife = Math.max(0, bovLife - dt * 2.5);
-    exhaustHeatMaterial.emissiveIntensity = heat * heat * 3 + popLife * 5;
-    popFlash.material.opacity = popLife;
-    popFlash.scale.setScalar(0.2 + (1 - popLife) * 0.7);
-
+    exhaustHeatMaterial.emissiveIntensity = heat * heat * 3;
     turbineBladeMaterial.emissiveIntensity = 0.15 + sim.boost * 0.9;
 
     const turboSpin = 3 + sim.boost * 12;
     compressorWheel.rotation.z += dt * turboSpin;
     turbineWheel.rotation.z -= dt * turboSpin;
 
-    const flowSpeed = 0.25 + sim.boost * 0.9 + bovLife * 2.5;
+    const flowSpeed = 0.25 + sim.boost * 0.9;
     const flowScale = clamp(sim.boost, 0.2, 1);
 
     boostParticles.forEach((particle) => {
@@ -1803,9 +1799,21 @@ function syncEngineButton() {
     ui.engine.classList.toggle("active", sim.running);
 }
 
+// Only the ENGINE button (a deliberate click) may switch the engine off; anything
+// else (refresh, other modules, restored page state) cannot leave it stopped.
+let userStoppedEngine = false;
+
 ui.engine?.addEventListener("click", () => {
     sim.running = !sim.running;
+    userStoppedEngine = !sim.running;
     syncEngineButton();
+});
+
+window.addEventListener("pageshow", () => {
+    if (!userStoppedEngine) {
+        sim.running = true;
+        syncEngineButton();
+    }
 });
 
 syncEngineButton();
@@ -1893,42 +1901,264 @@ ui.cutaway?.addEventListener("click", () => {
     ui.cutaway.classList.toggle("active", cutawayEnabled);
 });
 
-// ---- Sound -------------------------------------------------------------------
-// All audio lives in machina-audio.js. It runs on its own timer, independent of
-// this 3D view, so the engine is audible from any section of the page.
-import("./machina-audio.js")
-    .then(({ machinaAudio }) => machinaAudio.bindButton(ui.sound))
-    .catch((error) => console.warn("MACHINA audio module failed to load:", error));
+// ================= Inline-4 engine sound =================
+// Additive synth locked to the firing order. A four-cylinder fires twice per
+// crank turn, so the main order is 2x crank frequency; harmonics give the
+// raspy, sporty inline-4 character. Filtered noise adds intake and exhaust
+// texture, and a turbo whistle plus blow-off flutter ride on top.
+const audio = { context: null, enabled: false };
+const HARMONICS = [
+    // [order multiple of firing frequency, gain]
+    [0.5, 0.55], [1, 1.0], [1.5, 0.35], [2, 0.7], [3, 0.5], [4, 0.38], [5, 0.22], [6, 0.16], [8, 0.08]
+];
 
-// Exhaust pop flash + blow-off reaction, driven by the audio events.
-const popFlash = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-        map: flashTexture,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        toneMapped: false
-    })
-);
-popFlash.position.set(0, -0.12, -1.4);
-engineGroup.add(popFlash);
+function makeNoise(context) {
+    const buffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    return source;
+}
 
-let popLife = 0;
-let bovLife = 0;
-window.addEventListener("machina-pop", (e) => {
-    popLife = Math.min(1, 0.6 + (e.detail?.amp ?? 0.5));
+function makeDistortion(context, amount) {
+    const shaper = context.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < curve.length; i++) {
+        const x = (i / (curve.length - 1)) * 2 - 1;
+        curve[i] = Math.tanh(x * amount);
+    }
+    shaper.curve = curve;
+    shaper.oversample = "2x";
+    return shaper;
+}
+
+function startAudio() {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const context = new AudioContextClass();
+
+    const master = context.createGain();
+    master.gain.value = 0;
+    const comp = context.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.ratio.value = 4;
+    master.connect(comp);
+    comp.connect(context.destination);
+
+    // Harmonic stack -> body filter -> soft saturation
+    const bodyFilter = context.createBiquadFilter();
+    bodyFilter.type = "lowpass";
+    bodyFilter.Q.value = 1.2;
+    const resonance = context.createBiquadFilter();
+    resonance.type = "peaking";
+    resonance.frequency.value = 160;
+    resonance.gain.value = 6;
+    resonance.Q.value = 1.1;
+    const drive = makeDistortion(context, 1.8);
+    const engineBus = context.createGain();
+    engineBus.gain.value = 1;
+    bodyFilter.connect(resonance);
+    resonance.connect(drive);
+    drive.connect(engineBus);
+    engineBus.connect(master);
+
+    const partials = HARMONICS.map(([mult, gain]) => {
+        const osc = context.createOscillator();
+        osc.type = mult <= 1 ? "sawtooth" : "triangle";
+        const g = context.createGain();
+        g.gain.value = gain;
+        osc.connect(g);
+        g.connect(bodyFilter);
+        osc.start();
+        return { osc, mult, gain: g, base: gain };
+    });
+
+    // Slow wobble: tiny cylinder-to-cylinder irregularity so it is not a pure tone
+    const lfo = context.createOscillator();
+    lfo.frequency.value = 7;
+    const lfoGain = context.createGain();
+    lfoGain.gain.value = 0.6;
+    lfo.connect(lfoGain);
+    partials.forEach((p) => lfoGain.connect(p.osc.detune));
+    lfo.start();
+
+    // Intake roar: band-passed noise that opens with throttle
+    const intakeNoise = makeNoise(context);
+    const intakeFilter = context.createBiquadFilter();
+    intakeFilter.type = "bandpass";
+    intakeFilter.Q.value = 0.9;
+    const intakeGain = context.createGain();
+    intakeGain.gain.value = 0;
+    intakeNoise.connect(intakeFilter);
+    intakeFilter.connect(intakeGain);
+    intakeGain.connect(master);
+    intakeNoise.start();
+
+    // Exhaust crackle/rasp: noise chopped at firing rate
+    const rasp = makeNoise(context);
+    const raspFilter = context.createBiquadFilter();
+    raspFilter.type = "bandpass";
+    raspFilter.frequency.value = 900;
+    raspFilter.Q.value = 0.7;
+    const raspGain = context.createGain();
+    raspGain.gain.value = 0;
+    const raspPulse = context.createOscillator();
+    raspPulse.type = "square";
+    const raspPulseDepth = context.createGain();
+    raspPulseDepth.gain.value = 0.5;
+    raspPulse.connect(raspPulseDepth);
+    raspPulseDepth.connect(raspGain.gain);
+    rasp.connect(raspFilter);
+    raspFilter.connect(raspGain);
+    raspGain.connect(master);
+    rasp.start();
+    raspPulse.start();
+
+    // Turbo whistle (two detuned sines plus an upper harmonic) and blow-off hiss
+    const whistleA = context.createOscillator();
+    const whistleB = context.createOscillator();
+    const whistleC = context.createOscillator();
+    whistleA.type = "sine";
+    whistleB.type = "sine";
+    whistleC.type = "triangle";
+    const whistleGain = context.createGain();
+    whistleGain.gain.value = 0;
+    whistleA.connect(whistleGain);
+    whistleB.connect(whistleGain);
+    whistleC.connect(whistleGain);
+    whistleGain.connect(master);
+    whistleA.start();
+    whistleB.start();
+    whistleC.start();
+
+    const bovNoise = makeNoise(context);
+    const bovFilter = context.createBiquadFilter();
+    bovFilter.type = "highpass";
+    bovFilter.frequency.value = 2800;
+    const bovGain = context.createGain();
+    bovGain.gain.value = 0;
+    bovNoise.connect(bovFilter);
+    bovFilter.connect(bovGain);
+    bovGain.connect(master);
+    bovNoise.start();
+
+    Object.assign(audio, {
+        context, master, bodyFilter, partials, intakeFilter, intakeGain,
+        raspFilter, raspGain, raspPulse, raspPulseDepth, whistleA, whistleB, whistleC, whistleGain,
+        bovGain, lastBoost: 0, lastRpm: 0, throttle: 0, lastShift: 0, duck: 0
+    });
+}
+
+// Called from the shared tick, independent of what is on screen.
+function updateAudio(dt) {
+    if (!audio.context) return;
+
+    const now = audio.context.currentTime;
+    const rpm = Math.max(sim.rpm, 1);
+    const firingHz = clamp((rpm / 60) * 2, 8, 400);
+    const audible = audio.enabled && sim.running && sim.rpm > 50;
+
+    // Load estimate: boost and rpm rise means throttle is open
+    const drive = window.machina.drivetrain;
+    const linked = isGearboxLinked();
+    const load = linked ? clamp(drive.throttle, 0, 1) : clamp(sim.boost / 1.6, 0, 1);
+    audio.throttle = approach(audio.throttle, load, 8, dt);
+
+    // Each gearbox shift briefly cuts the engine note, like an ignition-cut upshift
+    if (linked && drive.shiftSeq !== audio.lastShift) {
+        audio.lastShift = drive.shiftSeq;
+        audio.duck = drive.shiftKind === "UP" ? 0.09 : 0.05;
+    }
+    audio.duck = Math.max(0, audio.duck - dt);
+    const duckFactor = audio.duck > 0 ? 0.25 : 1;
+    const level = audible ? (0.16 + (rpm / MAX_RPM) * 0.1 + audio.throttle * 0.12) * duckFactor : 0;
+    audio.master.gain.setTargetAtTime(level, now, 0.08);
+
+    audio.partials.forEach((p) => {
+        const f = firingHz * p.mult;
+        p.osc.frequency.setTargetAtTime(Math.min(f, 9000), now, 0.03);
+        // upper harmonics open with load, giving that hard-edged note under throttle
+        const bright = p.mult >= 3 ? 0.4 + audio.throttle * 0.9 : 1;
+        p.gain.gain.setTargetAtTime(p.base * bright, now, 0.08);
+    });
+
+    audio.bodyFilter.frequency.setTargetAtTime(500 + rpm * 0.9 + audio.throttle * 1800, now, 0.06);
+
+    audio.intakeFilter.frequency.setTargetAtTime(350 + rpm * 0.35, now, 0.08);
+    audio.intakeGain.gain.setTargetAtTime(audible ? 0.03 + audio.throttle * 0.1 * (rpm / MAX_RPM + 0.3) : 0, now, 0.08);
+
+    audio.raspPulse.frequency.setTargetAtTime(firingHz, now, 0.03);
+    audio.raspFilter.frequency.setTargetAtTime(700 + rpm * 0.4, now, 0.08);
+    audio.raspGain.gain.setTargetAtTime(audible ? 0.05 + audio.throttle * 0.12 : 0, now, 0.08);
+    audio.raspPulseDepth.gain.setTargetAtTime(audible ? 0.04 + audio.throttle * 0.1 : 0, now, 0.08);
+
+    const whistleHz = 1500 + sim.boost * 2200 + (rpm / MAX_RPM) * 600;
+    audio.whistleA.frequency.setTargetAtTime(whistleHz, now, 0.1);
+    audio.whistleB.frequency.setTargetAtTime(whistleHz * 1.012, now, 0.1);
+    audio.whistleC.frequency.setTargetAtTime(whistleHz * 2, now, 0.1);
+    audio.whistleGain.gain.setTargetAtTime(audible ? clamp(sim.boost / 1.2, 0, 1) * 0.14 : 0, now, 0.1);
+
+    // Blow-off when boost collapses quickly (throttle lift)
+    const drop = audio.lastBoost - sim.boost;
+    if (audible && audio.lastBoost > 0.6 && drop > 0.012) {
+        audio.bovGain.gain.cancelScheduledValues(now);
+        audio.bovGain.gain.setValueAtTime(0.4, now);
+        audio.bovGain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    }
+    audio.lastBoost = sim.boost;
+}
+
+// Sound starts on its own where the browser allows it, and otherwise on the
+// first click / tap / key press anywhere on the page (browser audio rule).
+let autoSoundAt = 0;
+
+async function enableSound() {
+    if (!audio.context) startAudio();
+    if (!audio.context) return false;
+    try { await audio.context.resume(); } catch (e) {}
+    if (audio.context.state !== "running") return false;
+    audio.enabled = true;
+    if (ui.sound) {
+        ui.sound.textContent = "SOUND: ON";
+        ui.sound.classList.add("active");
+    }
+    return true;
+}
+
+["pointerdown", "keydown", "touchend"].forEach((name) => {
+    window.addEventListener(name, async function once() {
+        if (audio.enabled) return;
+        if (await enableSound()) {
+            autoSoundAt = performance.now();
+            ["pointerdown", "keydown", "touchend"].forEach((n) =>
+                window.removeEventListener(n, once, true));
+        }
+    }, true);
 });
-window.addEventListener("machina-bov", () => {
-    bovLife = 1;
+enableSound(); // works straight away if the browser allows it
+
+ui.sound?.addEventListener("click", async () => {
+    // the click that auto-enabled sound shouldn't immediately toggle it off
+    if (performance.now() - autoSoundAt < 400) return;
+    if (!audio.context) startAudio();
+    if (!audio.context) return;
+
+    await audio.context.resume();
+    audio.enabled = !audio.enabled;
+
+    ui.sound.textContent = audio.enabled ? "SOUND: ON" : "SOUND: OFF";
+    ui.sound.classList.toggle("active", audio.enabled);
 });
+
 
 renderer.domElement.style.touchAction = "none";
 
 const QUALITY_LEVELS = [
     { name: "LOW", pixelRatio: 1, bloom: false, shadowSize: 0 },
-    { name: "MEDIUM", pixelRatio: 1.25, bloom: true, shadowSize: 1024 },
-    { name: "HIGH", pixelRatio: 1.5, bloom: true, shadowSize: 2048 }
+    { name: "MEDIUM", pixelRatio: 1.5, bloom: true, shadowSize: 1024 },
+    { name: "HIGH", pixelRatio: 2, bloom: true, shadowSize: 2048 }
 ];
 
 let qualityIndex = 2;
@@ -1980,8 +2210,27 @@ ui.quality?.addEventListener("click", () => {
     applyQuality((qualityIndex + 1) % QUALITY_LEVELS.length);
 });
 
-function animate(time) {
+// The simulation and sound run on their own clock so they keep going when the
+// 3D view scrolls off-screen (the gearbox section below, for example).
+let simClockLast = performance.now();
+function simTick(now) {
+    const dt = Math.min((now - simClockLast) / 1000, 0.1);
+    simClockLast = now;
+    if (!sim.running && !userStoppedEngine) {
+        sim.running = true;
+        syncEngineButton();
+    }
+    updateSimulation(now, dt);
+    // Keep the pistons, valves and turbo moving even when the 3D view is
+    // scrolled off-screen (e.g. the page reopens at the gearbox after a refresh).
+    if (!isLooping) updateEngineVisuals(now, dt);
+    renderTelemetry(dt);
+    updateAudio(dt);
+    requestAnimationFrame(simTick);
+}
+requestAnimationFrame(simTick);
 
+function animate(time) {
     const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
 
@@ -1989,7 +2238,6 @@ function animate(time) {
     controls.update();
     updateEngineVisuals(time, dt);
     updateExplodedView(dt);
-    renderTelemetry(dt);
 
     cutPlane.constant = approach(cutPlane.constant, cutPlaneTarget, 4, dt);
 
@@ -1997,17 +2245,6 @@ function animate(time) {
     updateLabels();
     monitorFrameRate(dt);
 }
-
-// The simulation (rpm, boost, crank angle) runs on its own always-on loop, so the
-// engine keeps "running" and sounding even while the 3D view is scrolled off-screen.
-let simLast = performance.now();
-function simTick(now) {
-    const dt = Math.min((now - simLast) / 1000, 0.1);
-    simLast = now;
-    updateSimulation(now, dt);
-    requestAnimationFrame(simTick);
-}
-requestAnimationFrame(simTick);
 
 let isLooping = false;
 
@@ -2049,3 +2286,84 @@ new IntersectionObserver((entries) => {
 applyQuality(window.matchMedia("(pointer: coarse)").matches ? 1 : 2);
 flyTo(cameraStart, targetStart, 2.6);
 startLoop();
+
+// ================= Floating drive bar =================
+// Visible whenever the engine view or the gearbox view is scrolled out of sight, so you
+// can hear, steer and watch both without shrinking the page.
+(function buildDriveBar() {
+    const bus = (window.machina = window.machina || {});
+    bus.hud = bus.hud || { throttle: 0, brake: 0 };
+
+    const style = document.createElement("style");
+    style.textContent = `
+    #machina-bar{position:fixed;left:50%;bottom:14px;transform:translate(-50%,24px);z-index:50;display:flex;gap:6px;align-items:center;
+        flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);padding:8px 10px;border:1px solid rgba(0,229,255,.45);
+        border-radius:12px;background:rgba(5,8,15,.88);backdrop-filter:blur(8px);color:#cfefff;
+        font:600 12px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.06em;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+    #machina-bar.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+    #machina-bar button{font:inherit;letter-spacing:inherit;color:inherit;background:rgba(0,229,255,.08);border:1px solid rgba(0,229,255,.4);
+        border-radius:8px;padding:8px 10px;min-width:38px;cursor:pointer;touch-action:none;user-select:none}
+    #machina-bar button.on{background:rgba(0,229,255,.28);border-color:#00e5ff;color:#fff}
+    #machina-bar .gas{border-color:rgba(255,138,0,.6)} #machina-bar .gas.on{background:rgba(255,138,0,.35);border-color:#ff8a00}
+    #machina-bar .read{padding:0 8px;min-width:190px;text-align:center;color:#7fdcff}`;
+    document.head.appendChild(style);
+
+    const bar = document.createElement("div");
+    bar.id = "machina-bar";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Drive controls");
+    const read = document.createElement("span");
+    read.className = "read";
+
+    const soundBtn = document.createElement("button");
+    soundBtn.type = "button";
+    soundBtn.addEventListener("click", () => ui.sound?.click());
+
+    const selBtns = {};
+    const selWrap = document.createDocumentFragment();
+    ["P", "R", "N", "D"].forEach((id) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = id;
+        b.setAttribute("aria-label", `Select ${id}`);
+        b.addEventListener("click", () => window.machina.requestSelector?.(id));
+        selBtns[id] = b;
+        selWrap.appendChild(b);
+    });
+
+    const hold = (label, key, cls) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        b.className = cls || "";
+        const set = (v) => { bus.hud[key] = v; b.classList.toggle("on", v > 0); };
+        b.addEventListener("pointerdown", (e) => { b.setPointerCapture(e.pointerId); set(1); });
+        ["pointerup", "pointercancel", "lostpointercapture"].forEach((n) => b.addEventListener(n, () => set(0)));
+        return b;
+    };
+
+    bar.append(soundBtn, selWrap, hold("GAS", "throttle", "gas"), hold("BRAKE", "brake"), read);
+    document.body.appendChild(bar);
+
+    const visible = new Map();
+    const watch = (el) => {
+        if (!el) return;
+        visible.set(el, true);
+        new IntersectionObserver((entries) => {
+            visible.set(el, entries[0].intersectionRatio > 0.6);
+            bar.classList.toggle("show", [...visible.values()].some((v) => !v));
+        }, { threshold: [0, 0.6, 1] }).observe(el);
+    };
+    watch(container);
+    watch(document.querySelector("#gearbox-canvas"));
+
+    setInterval(() => {
+        const d = window.machina.drivetrain;
+        soundBtn.textContent = audio.enabled ? "SOUND ON" : "SOUND OFF";
+        soundBtn.classList.toggle("on", audio.enabled);
+        if (!d) { read.textContent = `${Math.round(sim.rpm)} RPM`; return; }
+        const g = d.selector === "P" || d.selector === "N" ? d.selector : d.shifting ? d.targetGear : d.gear;
+        read.textContent = `${d.selector === "D" || d.selector === "S" || d.selector === "M" ? "G" + (g === 0 ? "-" : g) : g}  ·  ${Math.round(sim.rpm)} RPM  ·  ${Math.abs(Math.round(d.speedKmh))} KM/H`;
+        for (const [id, b] of Object.entries(selBtns)) b.classList.toggle("on", id === d.selector || (id === "D" && (d.selector === "S" || d.selector === "M")));
+    }, 100);
+})();
