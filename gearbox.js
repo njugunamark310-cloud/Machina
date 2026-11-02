@@ -301,6 +301,27 @@ function stepDrivetrain(s, dt, ctrl) {
         const sr = rpm > 50 ? clamp(turbine / rpm, 0, 1.2) : 0;
         const slipFrac = 1 - sr;
         
+         // fluid coupling torque (stall at sr=0, falls to zero as sr -> 1)
+        const kfac = clamp(slipFrac * 5, -1, 1);
+        const pump = CONVERTER_K * (rpm / 1000) * (rpm / 1000) * kfac;
+        const mult = 1 + (STALL_MULT - 1) * clamp(1 - sr / 0.85, 0, 1);
+ 
+        // locked clutch behaves like a stiff damper
+        const stiff = clamp(3.2 * (rpm - turbine), -650, 650);
+ 
+        const reactOnEngine = engaged ? (1 - s.lockup) * pump + s.lockup * stiff : 0;
+        const toTurbine = engaged ? (1 - s.lockup) * pump * (pump > 0 ? mult : 1) + s.lockup * stiff : 0;
+ 
+        // engine torque with limiter, friction and an idle governor
+        const limiter = rpm >= REDLINE ? 0 : 1;
+        const friction = rpm > 1 ? 12 + rpm * 0.011 : 0;
+        const idleHold = running ? clamp((IDLE_RPM - rpm) * 0.55, 0, 140) : 0;
+        const engineTorque = running
+            ? (s.throttle * torqueCurve(rpm) * limiter * torqueCut - friction * (1 - s.throttle) + idleHold)
+            : -friction;
+        s.engineTorque = engineTorque;
+ 
+        s.omega = Math.max(0, s.omega + ((engineTorque - reactOnEngine) / ENGINE_INERTIA) * h);
 
 
  
