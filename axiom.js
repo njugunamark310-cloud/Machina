@@ -248,9 +248,12 @@
         if (done) break;
 
         answer += decoder.decode(value, { stream: true });
+        reply.textContent = answer;
+        log.scrollTop = log.scrollHeight;
       }
 
       answer += decoder.decode();
+      reply.textContent = answer;
 
       if (!answer.trim()) {
         throw new Error('AXIOM returned an empty response.');

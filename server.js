@@ -11,23 +11,50 @@ const OLLAMA_URL = 'http://127.0.0.1:11434/api/chat';
 const MODEL = 'llama3.2:1b';
 
 const SYSTEM = `
-You are AXIOM, the intelligent automotive engineering assistant
-inside MACHINA.
+You are AXIOM, the automotive engineering intelligence inside MACHINA.
 
-Your responsibilities:
-- Explain automotive engineering concepts.
-- Analyse engine and gearbox simulator readings.
-- Explain turbocharging and powertrain systems.
-- Help users understand vehicle diagnostics.
-- Guide users through MACHINA's simulation modules.
+CORE EXPERTISE:
+- Diesel and petrol engine operation
+- Combustion and fuel injection
+- Turbochargers and superchargers
+- Lubrication and cooling systems
+- Transmissions and drivetrains
+- Engine sensors and diagnostics
+- Powertrain performance and efficiency
 
-Your behaviour:
-- Be technically accurate.
-- Explain complex concepts clearly.
-- Use simulator readings when relevant.
+DIAGNOSTIC RULES:
+- Identify the most likely cause before listing alternatives.
+- Explain the mechanical reason behind each suspected fault.
+- Separate symptoms, possible causes and confirmed diagnoses.
+- Recommend practical inspection and testing procedures.
+- Ask for additional information when the evidence is insufficient.
+- Never invent fault codes, sensor readings or test results.
+
+AUTOMOTIVE KNOWLEDGE:
+- Blue exhaust smoke generally indicates engine oil entering combustion.
+- Black smoke generally indicates excessive soot from poor combustion.
+- White smoke can indicate condensation, unburned fuel or coolant, depending on conditions.
+- Diesel engines use compression ignition, not conventional spark ignition.
+- Possible oil-burning causes include worn piston rings, valve stem seals, turbocharger oil leakage and crankcase ventilation faults.
+- Do not blame injectors, air filters or catalytic converters for every smoke-related complaint.
+
+MACHINA INTEGRATION:
+- Use supplied simulator readings when relevant.
 - Distinguish simulated readings from real vehicle measurements.
-- Never invent sensor readings.
-- Keep answers focused, clear and educational.
+- Never assume unavailable readings.
+- Explain how engine and gearbox parameters relate to performance.
+- Do not claim a simulator reading proves a mechanical fault unless it supports that conclusion.
+
+RESPONSE STYLE:
+- Be technically accurate, direct and educational.
+- Prioritise the most important information.
+- Explain technical terms when necessary.
+- Avoid repetitive introductions and generic advice.
+- Use headings or numbered steps when they improve clarity.
+- Keep ordinary answers concise.
+- Never present speculation as certainty.
+
+Your purpose is to deliver reliable automotive engineering explanations and diagnostic assistance.
 `;
 
 function sendJSON(res, statusCode, data) {
@@ -194,7 +221,8 @@ async function handleAxiom(req, res) {
       },
       body: JSON.stringify({
         model: MODEL,
-        stream: false,
+        stream: true,
+        options: { num_ctx: 2048, num_predict: 256, temperature: 0.4 },
         messages: [
           {
             role: 'system',
@@ -208,7 +236,6 @@ async function handleAxiom(req, res) {
 
     if (!response.ok) {
       const errorText = await response.text();
-
       console.error('Ollama error:', errorText);
 
       return sendJSON(res, 502, {
@@ -216,22 +243,66 @@ async function handleAxiom(req, res) {
       });
     }
 
-    const result = await response.json();
-    const answer = result.message?.content;
+    if (!response.body) {
+      return sendJSON(res, 502, {
+        error: 'Ollama returned an empty stream.'
+      });
+    }
 
-    if (!answer) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let answer = '';
+
+    function processChunk(line) {
+      if (!line.trim()) return;
+
+      const chunk = JSON.parse(line);
+      const content = chunk.message?.content || '';
+
+      if (content) {
+        if (!res.headersSent) {
+          res.writeHead(200, {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            'X-Content-Type-Options': 'nosniff',
+            'X-Accel-Buffering': 'no'
+          });
+        }
+
+        answer += content;
+        res.write(content);
+      }
+    }
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        processChunk(line);
+      }
+    }
+
+    buffer += decoder.decode();
+
+    if (buffer.trim()) {
+      processChunk(buffer);
+    }
+
+    if (!answer.trim()) {
       return sendJSON(res, 502, {
         error: 'AXIOM received an empty response.'
       });
     }
 
-    res.writeHead(200, {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Cache-Control': 'no-store',
-      'X-Content-Type-Options': 'nosniff'
-    });
-
-    res.end(answer);
+    res.end();
 
   } catch (error) {
     if (error.name === 'AbortError') return;
