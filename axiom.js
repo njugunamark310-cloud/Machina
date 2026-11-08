@@ -3,7 +3,10 @@
 (function () {
   'use strict';
 
-  const ENDPOINT = '/api/axiom';
+  const ENDPOINT =
+    location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+      ? '/api/axiom'
+      : 'https://machina.njugunamark310.workers.dev';
   const MAX_MESSAGES = 12;
   const MAX_INPUT = 1000;
 
