@@ -811,3 +811,113 @@ gearbox-lab {
     .gb-part-grid { grid-template-columns: 1fr; }
 }
  
+
+/* =========================================
+   AXIOM - ENGINEERING RESPONSE FORMATTING
+========================================= */
+
+.axiom-log {
+    gap: 14px;
+    padding: 8px 5px;
+    scroll-behavior: smooth;
+}
+
+.msg {
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+
+.msg-ai {
+    width: min(100%, 82ch);
+    padding: 16px 19px;
+}
+
+.msg-user {
+    line-height: 1.5;
+}
+
+.msg-ai .axiom-heading {
+    color: var(--cyan);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    margin: 18px 0 8px;
+}
+
+.msg-ai h2.axiom-heading {
+    font-size: 1.08rem;
+    border-bottom: 1px solid rgba(0, 229, 255, 0.18);
+    padding-bottom: 7px;
+}
+
+.msg-ai h3.axiom-heading {
+    font-size: 0.96rem;
+}
+
+.msg-ai .axiom-heading:first-child {
+    margin-top: 0;
+}
+
+.msg-ai .axiom-paragraph {
+    margin: 0 0 12px;
+    color: var(--text);
+}
+
+.msg-ai .axiom-list {
+    padding-left: 24px;
+    margin: 8px 0 16px;
+}
+
+.msg-ai .axiom-list li {
+    padding-left: 5px;
+    margin: 6px 0;
+    color: var(--text);
+}
+
+.msg-ai .axiom-list li::marker {
+    color: var(--cyan);
+}
+
+.msg-ai strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.msg-ai em {
+    color: var(--cyan);
+}
+
+.msg-ai code {
+    background: rgba(0, 229, 255, 0.09);
+    color: var(--cyan);
+    border: 1px solid rgba(0, 229, 255, 0.18);
+    border-radius: 5px;
+    padding: 2px 6px;
+    font-size: 0.9em;
+}
+
+.msg-ai .axiom-quote {
+    margin: 12px 0;
+    padding: 10px 14px;
+    border-left: 3px solid var(--cyan);
+    background: rgba(0, 229, 255, 0.045);
+    color: var(--muted);
+}
+
+.msg-ai hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 16px 0;
+}
+
+@media (max-width: 600px) {
+    .msg-ai {
+        width: 100%;
+        padding: 13px;
+    }
+
+    .msg {
+        max-width: 100%;
+        font-size: 13px;
+    }
+}
