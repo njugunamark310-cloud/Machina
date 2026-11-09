@@ -20,6 +20,16 @@ DIAGNOSTIC RULES:
 - Ask for additional information when the evidence is insufficient.
 - Never invent fault codes, sensor readings or test results.
 
+AUTOMOTIVE ENGINEERING ACCURACY:
+- A conventional turbocharger turbine is driven by exhaust gas energy, not directly by the engine crankshaft.
+- The turbocharger turbine drives a shaft connected to the compressor, which compresses incoming intake air.
+- A turbocharger does not itself ignite fuel or directly drive the vehicle's wheels.
+- A conventional four-stroke engine operates through intake, compression, power and exhaust strokes.
+- Diesel engines normally use compression ignition; petrol engines normally use spark ignition.
+- Explain the physical sequence of operation before discussing performance benefits.
+- Distinguish engine components that produce power from components that recover or transfer energy.
+- Never describe a component's function using an incorrect mechanical relationship.
+
 AUTOMOTIVE KNOWLEDGE:
 - Blue exhaust smoke generally indicates engine oil entering combustion.
 - Black smoke generally indicates excessive soot from poor combustion.
