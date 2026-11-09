@@ -1,4 +1,5 @@
-const MODEL = '@cf/meta/llama-3.2-1b-instruct';
+import { lookup } from './knowledge.js';
+const MODEL = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 
 const SYSTEM = `
 You are AXIOM, the automotive engineering intelligence inside MACHINA.
@@ -129,6 +130,12 @@ Speed: ${safe(gearbox.speed)}
 `;
 }
 
+function facts(messages) {
+  const q = messages.slice(-3).map(m => m.content).join(' ');
+  const f = lookup(q);
+  return f ? '\nVERIFIED REFERENCE FACTS (trust these over your own memory):\n' + f + '\n' : '';
+}
+
 function plainTextStream(source) {
   const { readable, writable } = new TransformStream();
   const encoder = new TextEncoder();
@@ -146,7 +153,7 @@ function plainTextStream(source) {
 
       try {
         const chunk = JSON.parse(data);
-        const content = chunk.response ?? chunk.delta?.content ?? chunk.message?.content ?? '';
+        const content = chunk.response ?? chunk.choices?.[0]?.delta?.content ?? chunk.delta?.content ?? chunk.message?.content ?? '';
         if (content) await writer.write(encoder.encode(content));
       } catch (error) {
         if (!(error instanceof SyntaxError)) throw error;
@@ -214,12 +221,12 @@ export default {
         messages: [
           {
             role: 'system',
-            content: SYSTEM + '\n' + simBlock(data.sim)
+            content: SYSTEM + '\n' + simBlock(data.sim) + facts(messages)
           },
           ...messages
         ],
         stream: true,
-        max_tokens: 256,
+        max_tokens: 600,
         temperature: 0.4
       });
 
