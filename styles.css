@@ -828,6 +828,64 @@ gearbox-lab {
   font: 11px/1.6 var(--mono);
 }
 
+.axiom-quick-access {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(0, 220, 255, .035), rgba(255, 166, 77, .025));
+  border: 1px solid rgba(0, 220, 255, .12);
+  border-radius: 14px;
+}
+
+.axiom-quick-label {
+  color: var(--muted);
+  font: 700 10px/1.4 var(--mono);
+  letter-spacing: .18em;
+}
+
+.axiom-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.axiom-quick-btn {
+  min-width: 0;
+  padding: 12px 10px;
+  color: var(--text);
+  background: rgba(255, 255, 255, .025);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font: 700 10px/1.4 var(--mono);
+  letter-spacing: .08em;
+  cursor: pointer;
+  transition: color .2s ease, background .2s ease, border-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.axiom-quick-btn:hover {
+  color: var(--cyan);
+  background: rgba(0, 220, 255, .07);
+  border-color: rgba(0, 220, 255, .4);
+  box-shadow: 0 0 18px rgba(0, 220, 255, .07);
+  transform: translateY(-2px);
+}
+
+.axiom-quick-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+.axiom-quick-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 700px) {
+  .axiom-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .axiom-log {
   display: flex;
   flex-direction: column;
