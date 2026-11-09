@@ -81,7 +81,8 @@ function cleanMessages(messages) {
       !['user', 'assistant'].includes(message.role) ||
       typeof message.content !== 'string' ||
       !message.content.trim() ||
-      message.content.length > 1000
+      message.content.length >
+        (message.role === 'user' ? 1000 : 4000)
     ) {
       throw new Error('Invalid conversation message.');
     }
