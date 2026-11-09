@@ -285,6 +285,16 @@
     }
   }
 
+  // Quick access prompts.
+  document.querySelectorAll('.axiom-quick-btn').forEach(function (button) {
+    button.addEventListener('click', function () {
+      if (busy) return;
+
+      input.value = button.dataset.prompt || '';
+      form.requestSubmit();
+    });
+  });
+
   // Handle submitted questions.
   form.addEventListener('submit', function (event) {
     event.preventDefault();
