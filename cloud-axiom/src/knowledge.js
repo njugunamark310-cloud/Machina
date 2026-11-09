@@ -1,5 +1,13 @@
 export const KB = [
   {
+    keys: ['twin scroll', 'twin-scroll', 'twinscroll'],
+    text: `A twin-scroll turbo has ONE turbine wheel and ONE compressor wheel, but the turbine housing is divided into two separate exhaust passages (scrolls). Cylinders whose exhaust pulses would otherwise interfere with each other (for example 1+4 and 2+3 on a four-cylinder) feed separate scrolls. This keeps pulses from disturbing each other, improves exhaust energy use and reduces lag at low-to-mid rpm. It does not have two turbine wheels.`
+  },
+  {
+    keys: ['skyactiv', 'skyactive', 'mazda 2.2', 'cx-5', 'cx-8', 'cx5', 'cx8'],
+    text: `Mazda Skyactiv-D 2.2: 2.2L 4-cylinder turbo diesel with an unusually LOW compression ratio for a diesel (14.0:1, versus 16-18:1 typical), which lowers NOx and soot. Lower-output versions use one variable-geometry turbo; higher-output versions use a two-stage (sequential) turbo. Typical outputs are about 150-175 PS and 380-420 Nm in Europe, with higher outputs in some markets such as Japan's CX-8. Common ownership issues: DPF clogging on short trips, EGR/intake carbon buildup, and engine oil level rising from fuel dilution because of DPF regeneration post-injection. Specs vary by market and year.`
+  },
+  {
     keys: ['white smoke', 'white exhaust'],
     text: `White smoke from a diesel: (1) Brief white smoke on a cold start that clears within a minute or two is often normal condensation and cold-combustion vapor. (2) Persistent white smoke after warm-up, with sweet-smelling exhaust, falling coolant level or bubbles in the radiator, points to coolant entering the combustion chamber: head gasket, cracked head or liner. (3) White smoke with raw diesel smell and rough running points to unburned fuel: faulty glow plugs or glow plug relay, an injector fault, incorrect injection timing, or low compression in a cylinder. Check coolant level and condition first, then glow plugs, then a compression test.`
   },
