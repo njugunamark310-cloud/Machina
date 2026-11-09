@@ -801,6 +801,33 @@ gearbox-lab {
   border-radius: 18px;
 }
 
+.axiom-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.axiom-heading .panel-label {
+  margin: 0;
+}
+
+.axiom-alpha {
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 166, 77, .45);
+  border-radius: 5px;
+  background: rgba(255, 166, 77, .09);
+  color: var(--orange);
+  font: 700 10px/1 var(--mono);
+  letter-spacing: .16em;
+  box-shadow: 0 0 12px rgba(255, 166, 77, .08);
+}
+
+.axiom-notice {
+  margin: -10px 0 0;
+  color: var(--muted);
+  font: 11px/1.6 var(--mono);
+}
+
 .axiom-log {
   display: flex;
   flex-direction: column;
