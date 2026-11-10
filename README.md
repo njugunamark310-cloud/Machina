@@ -179,6 +179,34 @@ The gearbox can also be operated using its on-screen controls.
 
 ---
 
+### How to Drive and Interact with the Gearbox
+
+The Gearbox Lab is interactive. You can operate the simulated vehicle using either the on-screen controls or your keyboard.
+
+1. Navigate to the Gearbox Lab.
+2. Click anywhere on the 3D gearbox to activate keyboard interaction.
+3. Select **D (Drive)** to engage forward driving.
+4. Press and hold **W** to accelerate, or use the on-screen throttle slider.
+5. Press and hold **S** to brake, or use the brake slider.
+6. Use **Q** and **E** to shift gears manually when manual mode is enabled.
+
+**Keyboard Controls**
+
+| Key | Action |
+|---|---|
+| W | Accelerate |
+| S | Brake |
+| P | Park |
+| R | Reverse |
+| N | Neutral |
+| D | Drive |
+| G | Toggle Sport Mode |
+| M | Toggle Manual Mode |
+| Q | Shift Down |
+| E | Shift Up |
+
+You can also interact directly with the gearbox components by clicking them to inspect their mechanical functions.
+
 ## Project Architecture
 
 ```text
@@ -247,3 +275,12 @@ MACHINA is built around one central idea:
 Instead of simply reading about how mechanical systems work, users should be able to explore them, manipulate their behaviour and observe how individual components interact.
 
 **MACHINA — Automotive Engineering Systems.**
+
+## Author
+
+**Mark Njuguna**  
+Creator & Developer of MACHINA
+
+GitHub: [@njugunamark310-cloud](https://github.com/njugunamark310-cloud)
+
+MACHINA is an independent engineering and software development project built to explore the intersection of automotive engineering, interactive simulation and artificial intelligence.
